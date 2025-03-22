@@ -1,0 +1,8 @@
+.idea
+
+.env.dev
+.env.prod
+.env.test
+
+certs
+.venv
