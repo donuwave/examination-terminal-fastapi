@@ -1,4 +1,23 @@
-# Разработка системы
+# 🎓 Examination Terminal — Backend
+
+Автоматизированный экзаменационный терминал: преподаватель создаёт курсы и тесты, открывает к ним доступ с дедлайном, студенты проходят тесты с таймером, а система считает результат и сама закрывает просроченные попытки.
+
+**Фронтенд:** [examination-terminal-vue](https://github.com/donuwave/examination-terminal-vue)
+
+![Статус](https://img.shields.io/badge/статус-в_разработке-orange?style=flat)
+
+> [!NOTE]
+> **В планах:** проверка ответов только на сервере, интерфейс преподавателя на фронте (конструктор тестов, статистика по студентам, выгрузка отчётов), деплой с демо-аккаунтами.
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy_2.0-D71F00?style=flat&logo=sqlalchemy&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=flat&logo=pytest&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+
+**Содержание:** [Концепция](#1-концепция-информационной-системы) · [Требования](#2-функциональные-требования) · [Архитектура](#3-архитектура-системы) · [Модуль тестирования](#31-внутреннее-устройство-модуля-системы-который-будет-тестироваться) · [Реализация](#4-особенности-реализации) · [Тесты](#5-тестирование) · [API](#api) · [Запуск](#запуск)
+
 ## 1. Концепция информационной системы
 Концепция системы: Автоматизированный экзаменационный терминал
 Описание: система предназначена для проведения тестирования знаний студентов. 
@@ -219,3 +238,82 @@ Backend обрабатывает все бизнес-логически опер
    - Если время истекло или студент завершил тест:
      - Статус обновляется на "завершен" или "просрочен".
      - Итоговые результаты сохраняются.
+
+
+## 4. Особенности реализации
+
+- Асинхронный стек: FastAPI + SQLAlchemy 2.0 (`AsyncSession`) + asyncpg
+- Модели на синтаксисе SQLAlchemy 2.0 (`Mapped`, `mapped_column`), связи многие-ко-многим: курс ↔ студенты, курс ↔ тесты, тест ↔ вопросы
+- Варианты ответов хранятся в Postgres `ARRAY`
+- При открытии доступа для каждого студента создаётся снимок вопросов. Если преподаватель потом изменит тест, уже выданные попытки не изменятся
+- Проверка ролей через собственный декоратор `@role_required`
+- Отложенные задачи на APScheduler: при открытии доступа планируется проверка статуса попытки на момент дедлайна
+- Миграции через Alembic, три окружения (dev / test / prod), для каждого режим в `run.sh`
+
+## 5. Тестирование
+
+Интеграционный тест проходит **полный сценарий системы** через HTTP-клиент на отдельной тестовой базе:
+
+1. Создание ролей «Преподаватель» и «Студент»
+2. Регистрация преподавателя и студента
+3. Преподаватель создаёт курс и тест с лимитом времени
+4. Создание вопросов и привязка их к тесту
+5. Привязка теста к курсу, добавление студента в курс
+6. Открытие доступа к тесту с дедлайном
+7. Вход студентом, получение назначенной попытки
+8. Запуск теста → завершение с ответами → проверка статуса и количества правильных ответов
+
+Как устроено:
+- `httpx.AsyncClient` с `ASGITransport` — запросы идут в приложение напрямую, без поднятия сервера
+- Сессия БД подменяется через `app.dependency_overrides` на тестовую базу
+- Тестовая база — отдельный Postgres в `docker-compose.test.yml` на порту 5438, к ней применяются те же миграции Alembic
+- `./run.sh test` поднимает базу, применяет миграции, запускает pytest и удаляет базу вместе с данными
+
+```bash
+./run.sh test
+```
+
+## API
+
+Swagger после запуска: [localhost:8000/docs](http://localhost:8000/docs)
+
+| Префикс | Описание |
+| --- | --- |
+| `/api/v1/auth` | регистрация, вход, refresh |
+| `/api/v1/role` | роли |
+| `/api/v1/profile` | профили |
+| `/api/v1/course` | курсы, студенты курса, привязка тестов |
+| `/api/v1/tests` | тесты, вопросы, открытие доступа |
+| `/api/v1/questions` | вопросы |
+| `/api/v1/test-progress` | попытки: список, старт, завершение |
+
+## Запуск
+
+Нужны Python 3.10+, Poetry и Docker.
+
+```bash
+git clone https://github.com/donuwave/examination-terminal-fastapi.git
+cd examination-terminal-fastapi
+poetry install
+```
+
+Ключи для JWT:
+
+```bash
+mkdir certs && cd certs
+openssl genrsa -out jwt-private.pem 2048
+openssl rsa -in jwt-private.pem -outform PEM -pubout -out jwt-public.pem
+cd ..
+```
+
+Создай `.env.dev` (и `.env.test` для тестов) по примеру `.env.example`:
+
+```
+DATABASE_URL=postgresql+asyncpg://postgres:qwerty@localhost:5437/postgres
+```
+
+```bash
+./run.sh        # dev: Postgres в Docker + миграции + сервер
+./run.sh test   # тестовая БД + pytest
+./run.sh prod   # всё в Docker
+```
