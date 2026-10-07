@@ -10,7 +10,8 @@ from api_v1.test_progress import crud as test_progress_crud
 from api_v1.test_progress.dependencies import (
     get_progress_test as get_progress_test_dependency,
 )
-from api_v1.test_progress.schemas import AnswerIn, TestProgressTest
+from api_v1.course_material.dependencies import get_course_for_teacher
+from api_v1.test_progress.schemas import AnswerIn, TestProgressTest, TestResultRow
 from core.models import Course, TestProgress, db_helper
 
 http_bearer = HTTPBearer()
@@ -27,6 +28,22 @@ async def get_list_progress_test(
         user_id=user_id,
         filter_date=filter_date or 0,
         session=session,
+    )
+
+
+@router.get(
+    "/results",
+    response_model=List[TestResultRow],
+    dependencies=[Depends(get_course_for_teacher)],
+)
+async def get_test_results(
+    course_id: int,
+    test_id: int,
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Результаты теста по студентам курса. Только для преподавателя курса."""
+    return await test_progress_crud.get_test_results(
+        session=session, course_id=course_id, test_id=test_id
     )
 
 

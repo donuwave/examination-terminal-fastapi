@@ -41,3 +41,23 @@ class AnswerIn(BaseModel):
 
     id: int
     student_answer: Optional[str] = None
+
+
+class StudentBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+class TestResultRow(BaseModel):
+    """Строка результатов теста для преподавателя: один студент курса."""
+
+    progress_id: int
+    student: StudentBrief
+    status: int
+    count_current_answer: Optional[int] = None
+    questions_total: int
+    attempt_date: Optional[int] = None

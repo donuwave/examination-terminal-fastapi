@@ -6,7 +6,12 @@ from sqlalchemy import select, Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from api_v1.test_progress.schemas import AnswerIn, TestProgressTest
+from api_v1.test_progress.schemas import (
+    AnswerIn,
+    StudentBrief,
+    TestProgressTest,
+    TestResultRow,
+)
 from core.models import TestProgress
 
 READY, STARTED, FINISHED, OVERDUE = 1, 2, 3, 4
@@ -59,19 +64,31 @@ def to_view(progress: TestProgress) -> TestProgressTest:
     return view
 
 
-async def get_list_test_progress_in_course(
+async def get_test_results(
     test_id: int, course_id: int, session: AsyncSession
-):
+) -> List[TestResultRow]:
+    """Результаты теста по всем студентам курса. Правильных ответов здесь нет."""
     state = (
         select(TestProgress)
         .where(TestProgress.test_id == test_id)
         .where(TestProgress.course_id == course_id)
         .options(selectinload(TestProgress.result_test))
+        .order_by(TestProgress.id)
     )
 
     result: Result = await session.execute(state)
     items = [await sync_state(session, item) for item in result.scalars().all()]
-    return [to_view(item) for item in items]
+    return [
+        TestResultRow(
+            progress_id=item.id,
+            student=StudentBrief.model_validate(item.participant),
+            status=item.status,
+            count_current_answer=item.count_current_answer,
+            questions_total=len(item.result_test),
+            attempt_date=item.attempt_date,
+        )
+        for item in items
+    ]
 
 
 async def get_list_test_progress(user_id: int, filter_date: int, session: AsyncSession):
