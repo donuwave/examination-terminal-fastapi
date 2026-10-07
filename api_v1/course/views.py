@@ -8,7 +8,14 @@ from api_v1.auth.decorators import role_required
 from api_v1.auth.dependencies import get_user_id_in_access_token
 from api_v1.course import crud as course_crud
 from api_v1.course.dependencies import get_course_by_id
-from api_v1.course.schemas import CourseGet, CourseUpdatePartial, CourseItemGet
+from api_v1.course_material.dependencies import get_course_for_member
+from api_v1.course.schemas import (
+    CatalogCourse,
+    CategoryGet,
+    CourseGet,
+    CourseItemGet,
+    CourseUpdatePartial,
+)
 from core.models import db_helper
 
 http_bearer = HTTPBearer()
@@ -20,6 +27,7 @@ async def get_course(
     search: Optional[str] = Query(None, min_length=1, description="Поисковая строка"),
     sort_by: Optional[str] = Query(None),
     direction: Optional[int] = Query(None),
+    category_id: Optional[int] = Query(None, description="Фильтр по типу курса"),
     user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
@@ -29,6 +37,26 @@ async def get_course(
         search=search,
         direct=direction,
         sort_by=sort_by,
+        category_id=category_id,
+    )
+
+
+@router.get("/categories", response_model=list[CategoryGet])
+async def get_categories(
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await course_crud.get_categories(session=session)
+
+
+@router.get("/catalog", response_model=list[CatalogCourse])
+async def get_catalog(
+    search: Optional[str] = Query(None, min_length=1, description="Поисковая строка"),
+    category_id: Optional[int] = Query(None, description="Фильтр по типу курса"),
+    user_id: int = Depends(get_user_id_in_access_token),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await course_crud.get_catalog(
+        session=session, user_id=user_id, search=search, category_id=category_id
     )
 
 
@@ -39,14 +67,23 @@ async def create_course(
     user_id: int = Depends(get_user_id_in_access_token),
     name: str = Form(),
     description: str = Form(),
+    category_id: Optional[int] = Form(None),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await course_crud.create_course(
-        session=session, user_id=user_id, name=name, description=description
+        session=session,
+        user_id=user_id,
+        name=name,
+        description=description,
+        category_id=category_id,
     )
 
 
-@router.get("/{course_id}", response_model=CourseItemGet)
+@router.get(
+    "/{course_id}",
+    response_model=CourseItemGet,
+    dependencies=[Depends(get_course_for_member)],
+)
 async def get_item_course(
     course: CourseGet = Depends(get_course_by_id),
 ):
@@ -112,4 +149,30 @@ async def delete_student_in_course(
 ):
     return await course_crud.delete_student_in_course(
         student_id=student_id, session=session, course=course
+    )
+
+
+@router.post("/{course_id}/leave")
+@role_required("Студент")
+async def leave_course(
+    request: Request,
+    user_id: int = Depends(get_user_id_in_access_token),
+    course: CourseGet = Depends(get_course_by_id),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await course_crud.delete_student_in_course(
+        student_id=user_id, session=session, course=course
+    )
+
+
+@router.post("/{course_id}/enroll")
+@role_required("Студент")
+async def enroll_in_course(
+    request: Request,
+    course_id: int,
+    user_id: int = Depends(get_user_id_in_access_token),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await course_crud.enroll_student(
+        session=session, course_id=course_id, user_id=user_id
     )

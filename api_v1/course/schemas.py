@@ -6,12 +6,20 @@ from api_v1.course_test.schemas import Test, TestInCourse
 from api_v1.profile.schemas import ProfileGet
 
 
+class CategoryGet(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
 class CourseBase(BaseModel):
     id: int
     name: str
     description: str
     teacher_id: int
     teacher: ProfileGet
+    category: Optional[CategoryGet] = None
 
 
 class Course(CourseBase):
@@ -46,3 +54,19 @@ class CourseItemGet(CourseGet):
 class CourseUpdatePartial(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    category_id: Optional[int] = None
+
+
+class CatalogCourse(BaseModel):
+    """Курс в общем каталоге. Без списка студентов: чужие данные не раскрываем."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str
+    category: Optional[CategoryGet] = None
+    teacher: ProfileGet
+    students_count: int
+    tests_count: int
+    is_member: bool

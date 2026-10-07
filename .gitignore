@@ -6,3 +6,5 @@
 
 certs
 .venv
+uploads
+__pycache__/

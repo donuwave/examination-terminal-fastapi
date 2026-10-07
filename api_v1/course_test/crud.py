@@ -82,7 +82,7 @@ async def access_activation(
         scheduler.add_job(
             scheduled_test_progress_overdue,
             trigger="date",
-            run_date=deadline_date,
+            run_date=datetime.datetime.fromtimestamp(deadline_date, tz=pytz.UTC),
             args=[test_progress.id],
         )
 
