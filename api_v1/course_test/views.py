@@ -67,6 +67,7 @@ async def access_activation(
     deadline_date: int,
     test: TestGet = Depends(get_test),
     course: CourseGet = Depends(get_course_by_id),
+    user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await test_crud.access_activation(
@@ -74,4 +75,5 @@ async def access_activation(
         session=session,
         test=test,
         deadline_date=deadline_date,
+        user_id=user_id,
     )

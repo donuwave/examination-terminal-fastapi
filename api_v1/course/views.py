@@ -8,7 +8,10 @@ from api_v1.auth.decorators import role_required
 from api_v1.auth.dependencies import get_user_id_in_access_token
 from api_v1.course import crud as course_crud
 from api_v1.course.dependencies import get_course_by_id
-from api_v1.course_material.dependencies import get_course_for_member
+from api_v1.course_material.dependencies import (
+    get_course_for_member,
+    get_course_for_teacher,
+)
 from api_v1.course.schemas import (
     CatalogCourse,
     CategoryGet,
@@ -16,6 +19,7 @@ from api_v1.course.schemas import (
     CourseItemGet,
     CourseUpdatePartial,
 )
+from api_v1.profile.schemas import Profile
 from core.models import db_helper
 
 http_bearer = HTTPBearer()
@@ -38,6 +42,22 @@ async def get_course(
         direct=direction,
         sort_by=sort_by,
         category_id=category_id,
+    )
+
+
+@router.get(
+    "/{course_id}/candidates",
+    response_model=list[Profile],
+    dependencies=[Depends(get_course_for_teacher)],
+)
+async def get_student_candidates(
+    course_id: int,
+    search: Optional[str] = Query(None, min_length=1),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Студенты, которых можно записать на курс: ещё не в курсе, поиск по имени и почте."""
+    return await course_crud.get_student_candidates(
+        session=session, course_id=course_id, search=search
     )
 
 
@@ -90,7 +110,9 @@ async def get_item_course(
     return course
 
 
-@router.patch("/{course_id}")
+@router.patch("/{course_id}",
+    dependencies=[Depends(get_course_for_teacher)],
+)
 @role_required("Преподаватель")
 async def update_course(
     request: Request,
@@ -103,7 +125,9 @@ async def update_course(
     )
 
 
-@router.delete("/{course_id}")
+@router.delete("/{course_id}",
+    dependencies=[Depends(get_course_for_teacher)],
+)
 @role_required("Преподаватель")
 async def delete_course(
     request: Request,
@@ -113,7 +137,9 @@ async def delete_course(
     return await course_crud.delete_course(course=course, session=session)
 
 
-@router.post("/{course_id}/add_test")
+@router.post("/{course_id}/add_test",
+    dependencies=[Depends(get_course_for_teacher)],
+)
 @role_required("Преподаватель")
 async def add_test_in_course(
     request: Request,
@@ -126,7 +152,9 @@ async def add_test_in_course(
     )
 
 
-@router.post("/{course_id}/add_student")
+@router.post("/{course_id}/add_student",
+    dependencies=[Depends(get_course_for_teacher)],
+)
 @role_required("Преподаватель")
 async def add_student_in_course(
     request: Request,
@@ -139,7 +167,9 @@ async def add_student_in_course(
     )
 
 
-@router.post("/{course_id}/delete_student")
+@router.post("/{course_id}/delete_student",
+    dependencies=[Depends(get_course_for_teacher)],
+)
 @role_required("Преподаватель")
 async def delete_student_in_course(
     request: Request,

@@ -1,6 +1,8 @@
 import datetime
+import time
 
 import pytz
+from fastapi import HTTPException, status
 from sqlalchemy import select, Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,7 +34,7 @@ async def create_test(session: AsyncSession, user_id: int, name: str, time_limit
     test = Test(name=name, time_limit=time_limit, creator_id=user_id)
     session.add(test)
     await session.commit()
-    return test
+    return {"id": test.id, "name": test.name, "time_limit": test.time_limit}
 
 
 async def add_questions_in_test(
@@ -54,7 +56,43 @@ async def access_activation(
     deadline_date,
     course: CourseGet,
     session: AsyncSession,
+    user_id: int,
 ):
+    if course.teacher_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Открыть доступ может только преподаватель курса",
+        )
+
+    if test is None or all(assoc.test_id != test.id for assoc in course.tests):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этого теста нет в курсе",
+        )
+
+    if deadline_date <= int(time.time()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Дедлайн должен быть в будущем",
+        )
+
+    already_open = await session.scalar(
+        select(TestProgress.id)
+        .where(TestProgress.test_id == test.id, TestProgress.course_id == course.id)
+        .limit(1)
+    )
+    if already_open is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Доступ к тесту уже открыт",
+        )
+
+    if not test.questions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="В тесте нет вопросов",
+        )
+
     for student in course.students:
         questions = [
             TestProgressResult(
