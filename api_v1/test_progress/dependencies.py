@@ -1,11 +1,11 @@
-import time
 from typing import Optional
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from api_v1.test_progress.crud import sync_state
 from core.models import TestProgress, db_helper
 
 
@@ -30,27 +30,11 @@ async def get_progress_test(
     if course_id:
         state = state.where(TestProgress.course_id == course_id)
 
-    test_progress = await session.scalar(state)
+    progress = await session.scalar(state)
 
-    if not test_progress:
-        return None
+    if not progress:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Попытка не найдена"
+        )
 
-    if (
-        test_progress.status == 1
-        or test_progress.status == 3
-        or test_progress.status == 4
-    ):
-        return test_progress
-
-    end_date = (
-        test_progress.deadline_date
-        if test_progress.attempt_date > test_progress.deadline_date
-        else test_progress.attempt_date
-    )
-
-    remaining_time = end_date - (int(time.time()) + int(test_progress.timelimit))
-
-    if test_progress.status == 2:
-        test_progress.remaining_time = remaining_time
-
-    return test_progress
+    return await sync_state(session, progress)
