@@ -19,7 +19,6 @@ from api_v1.course.schemas import (
     CourseItemGet,
     CourseUpdatePartial,
 )
-from api_v1.profile.schemas import Profile
 from core.models import db_helper
 
 http_bearer = HTTPBearer()
@@ -42,22 +41,6 @@ async def get_course(
         direct=direction,
         sort_by=sort_by,
         category_id=category_id,
-    )
-
-
-@router.get(
-    "/{course_id}/candidates",
-    response_model=list[Profile],
-    dependencies=[Depends(get_course_for_teacher)],
-)
-async def get_student_candidates(
-    course_id: int,
-    search: Optional[str] = Query(None, min_length=1),
-    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
-):
-    """Студенты, которых можно записать на курс: ещё не в курсе, поиск по имени и почте."""
-    return await course_crud.get_student_candidates(
-        session=session, course_id=course_id, search=search
     )
 
 

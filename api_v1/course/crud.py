@@ -18,8 +18,6 @@ from core.models import (
     CourseStudentAssociation,
     CourseTestAssociation,
     MaterialFile,
-    Profile as ProfileModel,
-    Role,
 )
 
 
@@ -227,29 +225,3 @@ async def enroll_student(session: AsyncSession, course_id: int, user_id: int):
     session.add(CourseStudentAssociation(course_id=course_id, profile_id=user_id))
     await session.commit()
     return {"id": course_id}
-
-
-async def get_student_candidates(
-    session: AsyncSession, course_id: int, search: Optional[str], limit: int = 50
-):
-    enrolled = select(CourseStudentAssociation.profile_id).where(
-        CourseStudentAssociation.course_id == course_id
-    )
-    state = (
-        select(ProfileModel)
-        .join(Role, Role.id == ProfileModel.role_id)
-        .where(Role.name == "Студент")
-        .where(ProfileModel.id.not_in(enrolled))
-        .order_by(ProfileModel.last_name, ProfileModel.first_name, ProfileModel.email)
-        .limit(limit)
-    )
-    if search:
-        pattern = f"%{search}%"
-        state = state.where(
-            or_(
-                ProfileModel.email.ilike(pattern),
-                ProfileModel.first_name.ilike(pattern),
-                ProfileModel.last_name.ilike(pattern),
-            )
-        )
-    return list((await session.scalars(state)).all())
