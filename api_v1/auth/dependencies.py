@@ -59,7 +59,7 @@ async def register_user(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists",
+            detail="Не удалось создать аккаунт. Если вы уже регистрировались, попробуйте войти",
         )
 
     base_role = await auth_crud.get_role_by_id(session=session, role_id=role_id)
