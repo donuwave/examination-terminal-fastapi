@@ -9,6 +9,9 @@ from api_v1.questions.schemas import QuestionGet
 class TestBase(BaseModel):
     name: str
     time_limit: int
+    pass_percent: int = 60
+    max_attempts: int = 2
+    retry_delay_minutes: int = 120
     creator_id: int
     creator: ProfileGet
 
