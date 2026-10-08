@@ -18,6 +18,7 @@ from api_v1.course.schemas import (
     CourseGet,
     CourseItemGet,
     CourseUpdatePartial,
+    LearningItem,
 )
 from core.models import db_helper
 
@@ -42,6 +43,15 @@ async def get_course(
         sort_by=sort_by,
         category_id=category_id,
     )
+
+
+@router.get("/learning", response_model=list[LearningItem])
+async def get_learning(
+    user_id: int = Depends(get_user_id_in_access_token),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Курсы студента: прогресс по разделам и следующий шаг."""
+    return await course_crud.get_learning(session=session, user_id=user_id)
 
 
 @router.get("/categories", response_model=list[CategoryGet])

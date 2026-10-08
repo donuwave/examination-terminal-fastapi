@@ -9,6 +9,7 @@ from sqlalchemy import (
     ARRAY,
     ForeignKey,
     BigInteger,
+    Boolean,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,11 +19,10 @@ if TYPE_CHECKING:
     from .test import Test
     from .profile import Profile
 
-# status:
-# 1 - готов для прохождения
-# 2 - начат
-# 3 - закончен
-# 4 - просрочено по времени
+# Одна запись — одна попытка студента. Статусы:
+# 2 - попытка идёт
+# 3 - завершена
+# (1 и 4 остались от прежней схемы с дедлайнами и больше не используются)
 
 
 class TestProgress(Base):
@@ -48,8 +48,13 @@ class TestProgress(Base):
         nullable=True,
     )
     count_current_answer: Mapped[int] = mapped_column(Integer, nullable=True)
+    attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    finished_at: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=True)
     result_test: Mapped[List["TestProgressResult"]] = relationship(
-        "TestProgressResult", back_populates="test_progress"
+        "TestProgressResult",
+        back_populates="test_progress",
+        order_by="TestProgressResult.id",
     )
 
 

@@ -70,3 +70,25 @@ class CatalogCourse(BaseModel):
     students_count: int
     tests_count: int
     is_member: bool
+
+
+class NextTest(BaseModel):
+    id: int
+    name: str
+
+
+class LearningItem(BaseModel):
+    """Где студент остановился в курсе."""
+
+    course_id: int
+    course_name: str
+    category: Optional[CategoryGet] = None
+    teacher_name: str
+    sections_total: int
+    sections_passed: int
+    # Первый раздел, который ещё не сдан; None, если курс пройден.
+    current_section_id: Optional[int] = None
+    current_section_title: Optional[str] = None
+    current_section_number: Optional[int] = None
+    next_test: Optional[NextTest] = None
+    finished: bool = False

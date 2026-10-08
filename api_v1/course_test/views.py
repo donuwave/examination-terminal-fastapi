@@ -41,9 +41,18 @@ async def create_test(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
     name_test: str = Form(),
     time_limit: int = Form(),
+    pass_percent: int = Form(60, ge=1, le=100),
+    max_attempts: int = Form(2, ge=1, le=10),
+    retry_delay_minutes: int = Form(120, ge=0, le=10080),
 ):
     return await test_crud.create_test(
-        session=session, user_id=user_id, name=name_test, time_limit=time_limit
+        session=session,
+        user_id=user_id,
+        name=name_test,
+        time_limit=time_limit,
+        pass_percent=pass_percent,
+        max_attempts=max_attempts,
+        retry_delay_minutes=retry_delay_minutes,
     )
 
 
@@ -57,23 +66,4 @@ async def add_questions_in_test(
 ):
     return await test_crud.add_questions_in_test(
         test=test, session=session, questions=questions
-    )
-
-
-@router.post("/{test_id}/access_activation")
-@role_required("Преподаватель")
-async def access_activation(
-    request: Request,
-    deadline_date: int,
-    test: TestGet = Depends(get_test),
-    course: CourseGet = Depends(get_course_by_id),
-    user_id: int = Depends(get_user_id_in_access_token),
-    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
-):
-    return await test_crud.access_activation(
-        course=course,
-        session=session,
-        test=test,
-        deadline_date=deadline_date,
-        user_id=user_id,
     )

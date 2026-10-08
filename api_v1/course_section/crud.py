@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from api_v1.course_material.storage import delete_files
 from api_v1.course_section.schemas import SectionGet, SectionTest
+from api_v1.course_section.state import course_progress
+from api_v1.test_progress.schemas import TestState
 from core.models import (
     CourseMaterial,
     CourseSection,
@@ -24,7 +26,23 @@ async def get_section(session: AsyncSession, course_id: int, section_id: int) ->
     return section
 
 
-async def list_sections(session: AsyncSession, course_id: int) -> List[SectionGet]:
+def _section_test(test: Test, state: TestState | None) -> SectionTest:
+    return SectionTest(
+        id=test.id,
+        name=test.name,
+        time_limit=test.time_limit,
+        questions_count=len(test.questions),
+        pass_percent=test.pass_percent,
+        max_attempts=test.max_attempts,
+        retry_delay_minutes=test.retry_delay_minutes,
+        state=state,
+    )
+
+
+async def list_sections(
+    session: AsyncSession, course_id: int, viewer_id: int, is_teacher: bool
+) -> List[SectionGet]:
+    """Разделы курса. Студенту закрытые разделы приходят без содержимого."""
     sections = (
         await session.scalars(
             select(CourseSection)
@@ -41,31 +59,38 @@ async def list_sections(session: AsyncSession, course_id: int) -> List[SectionGe
             .order_by(CourseTestAssociation.id)
         )
     ).all()
-
-    tests_by_section: dict[int, list[SectionTest]] = {}
+    tests_by_section: dict[int, list[Test]] = {}
     for assoc in associations:
-        if assoc.section_id is None:
-            continue
-        tests_by_section.setdefault(assoc.section_id, []).append(
-            SectionTest(
-                id=assoc.test.id,
-                name=assoc.test.name,
-                time_limit=assoc.test.time_limit,
-                questions_count=len(assoc.test.questions),
+        if assoc.section_id is not None:
+            tests_by_section.setdefault(assoc.section_id, []).append(assoc.test)
+
+    progress = None if is_teacher else await course_progress(session, course_id, viewer_id)
+    status_by_section = (
+        {item.section.id: item.status for item in progress.sections} if progress else {}
+    )
+
+    result: List[SectionGet] = []
+    for section in sections:
+        tests = tests_by_section.get(section.id, [])
+        status = status_by_section.get(section.id)
+        locked = status == "locked"
+        result.append(
+            SectionGet(
+                id=section.id,
+                course_id=section.course_id,
+                title=section.title,
+                position=section.position,
+                materials=[] if locked else section.materials,
+                tests=[]
+                if locked
+                else [_section_test(test, progress.test_states.get(test.id) if progress else None) for test in tests],
+                materials_count=len(section.materials),
+                tests_count=len(tests),
+                locked=locked,
+                status=status,
             )
         )
-
-    return [
-        SectionGet(
-            id=section.id,
-            course_id=section.course_id,
-            title=section.title,
-            position=section.position,
-            materials=section.materials,
-            tests=tests_by_section.get(section.id, []),
-        )
-        for section in sections
-    ]
+    return result
 
 
 async def create_section(session: AsyncSession, course_id: int, title: str) -> CourseSection:

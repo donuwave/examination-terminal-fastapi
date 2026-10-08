@@ -5,7 +5,14 @@ from sqlalchemy import select, Result, or_, asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from api_v1.course.schemas import CatalogCourse, CourseGet, CourseUpdatePartial
+from api_v1.course.schemas import (
+    CatalogCourse,
+    CourseGet,
+    CourseUpdatePartial,
+    LearningItem,
+    NextTest,
+)
+from api_v1.course_section.state import course_progress
 from api_v1.profile.schemas import ProfileGet
 from api_v1.course_test.dependencies import get_test
 from api_v1.profile import crud as crud_profile
@@ -225,3 +232,48 @@ async def enroll_student(session: AsyncSession, course_id: int, user_id: int):
     session.add(CourseStudentAssociation(course_id=course_id, profile_id=user_id))
     await session.commit()
     return {"id": course_id}
+
+
+async def get_learning(session: AsyncSession, user_id: int) -> list[LearningItem]:
+    """Курсы студента с прогрессом и следующим шагом."""
+    courses = (
+        await session.scalars(
+            select(Course)
+            .join(CourseStudentAssociation, CourseStudentAssociation.course_id == Course.id)
+            .where(CourseStudentAssociation.profile_id == user_id)
+            .order_by(Course.name)
+        )
+    ).all()
+
+    items = []
+    for course in courses:
+        progress = await course_progress(session, course.id, user_id)
+        current = next(
+            ((index, item) for index, item in enumerate(progress.sections, start=1) if item.status == "open"),
+            None,
+        )
+        next_test = None
+        if current:
+            for test in current[1].tests:
+                if progress.test_states[test.id].status != "passed":
+                    next_test = NextTest(id=test.id, name=test.name)
+                    break
+
+        teacher = course.teacher
+        items.append(
+            LearningItem(
+                course_id=course.id,
+                course_name=course.name,
+                category=course.category,
+                teacher_name=" ".join(filter(None, [teacher.first_name, teacher.last_name]))
+                or teacher.email,
+                sections_total=len(progress.sections),
+                sections_passed=progress.passed_count,
+                current_section_id=current[1].section.id if current else None,
+                current_section_title=current[1].section.title if current else None,
+                current_section_number=current[0] if current else None,
+                next_test=next_test,
+                finished=bool(progress.sections) and current is None,
+            )
+        )
+    return items

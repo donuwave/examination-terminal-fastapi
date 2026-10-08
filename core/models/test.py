@@ -15,6 +15,13 @@ class Test(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     time_limit: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # Правила прохождения: проходной процент, число попыток и пауза между ними.
+    pass_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=60, server_default="60")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=2, server_default="2")
+    retry_delay_minutes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=120, server_default="120"
+    )
+
     creator_id: Mapped[int] = mapped_column(ForeignKey("profile.id"), nullable=False)
     creator: Mapped["Profile"] = relationship("Profile", lazy="joined")
 

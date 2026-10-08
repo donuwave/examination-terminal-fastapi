@@ -10,7 +10,6 @@ from core.models import (
     CourseStudentAssociation,
     db_helper,
     CourseTestAssociation,
-    TestProgress,
 )
 
 
@@ -30,15 +29,9 @@ async def get_course_by_id(
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Курс не найден")
 
-    # Доступ к тесту открыт, если по нему уже есть попытки студентов.
-    opened = set(
-        await session.scalars(
-            select(TestProgress.test_id)
-            .where(TestProgress.course_id == course_id)
-            .distinct()
-        )
-    )
+    # Раньше здесь считалось, открыт ли доступ к тесту. Теперь доступ определяется прогрессом
+    # студента, а поле осталось ради совместимости ответа.
     for association in course.tests:
-        association.test.access_test = association.test.id in opened
+        association.test.access_test = True
 
     return course

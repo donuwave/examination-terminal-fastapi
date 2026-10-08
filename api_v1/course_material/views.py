@@ -6,12 +6,14 @@ from fastapi.security import HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api_v1.auth.dependencies import get_user_id_in_access_token
 from api_v1.course_material import storage
 from api_v1.course_material.dependencies import (
     get_course_for_member,
     get_course_for_teacher,
 )
 from api_v1.course_material.schemas import MaterialGet
+from api_v1.course_section.state import unlocked_section_ids
 from core.models import Course, CourseMaterial, CourseSection, MaterialFile, db_helper
 
 http_bearer = HTTPBearer()
@@ -21,6 +23,7 @@ router = APIRouter(tags=["CourseMaterial"], dependencies=[Depends(http_bearer)])
 @router.get("/{course_id}/materials", response_model=list[MaterialGet])
 async def get_materials(
     course: Course = Depends(get_course_for_member),
+    user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     result = await session.scalars(
@@ -28,7 +31,11 @@ async def get_materials(
         .where(CourseMaterial.course_id == course.id)
         .order_by(CourseMaterial.id)
     )
-    return list(result)
+    materials = list(result)
+    if course.teacher_id != user_id:
+        unlocked = await unlocked_section_ids(session, course.id, user_id)
+        materials = [item for item in materials if item.section_id in unlocked]
+    return materials
 
 
 @router.post(
@@ -109,12 +116,20 @@ async def delete_material(
 async def download_file(
     file_id: int,
     course: Course = Depends(get_course_for_member),
+    user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     item = await session.get(MaterialFile, file_id)
     material = await session.get(CourseMaterial, item.material_id) if item else None
     if item is None or material is None or material.course_id != course.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
+
+    if course.teacher_id != user_id and material.section_id not in await unlocked_section_ids(
+        session, course.id, user_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Раздел ещё закрыт для вас"
+        )
 
     path = storage.file_path(item.stored_name)
     if not path.exists():
