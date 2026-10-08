@@ -4,6 +4,7 @@ __all__ = (
     "Course",
     "CourseStudentAssociation",
     "CourseCategory",
+    "CourseSection",
     "CourseMaterial",
     "MaterialFile",
     "User",
@@ -25,6 +26,7 @@ from .db_helper import db_helper, DatabaseHelper
 from .course import Course
 from .course_student import CourseStudentAssociation
 from .course_category import CourseCategory
+from .course_section import CourseSection
 from .course_material import CourseMaterial, MaterialFile
 from .course_test import CourseTestAssociation
 from .test import Test

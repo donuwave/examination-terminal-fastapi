@@ -8,6 +8,7 @@ from core.models import Base
 
 if TYPE_CHECKING:
     from .course import Course
+    from .course_section import CourseSection
 
 
 class CourseMaterial(Base):
@@ -18,6 +19,9 @@ class CourseMaterial(Base):
     course_id: Mapped[int] = mapped_column(
         ForeignKey("course.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    section_id: Mapped[int | None] = mapped_column(
+        ForeignKey("course_section.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
@@ -25,6 +29,7 @@ class CourseMaterial(Base):
     )
 
     course: Mapped["Course"] = relationship(back_populates="materials")
+    section: Mapped["CourseSection | None"] = relationship(back_populates="materials")
     files: Mapped[list["MaterialFile"]] = relationship(
         back_populates="material",
         cascade="all, delete-orphan",

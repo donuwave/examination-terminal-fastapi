@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .course_test import CourseTestAssociation
     from .course_material import CourseMaterial
     from .course_category import CourseCategory
+    from .course_section import CourseSection
 
 
 class Course(Base):
@@ -35,4 +36,10 @@ class Course(Base):
     )
     materials: Mapped[list["CourseMaterial"]] = relationship(
         back_populates="course", cascade="all, delete-orphan", passive_deletes=True
+    )
+    sections: Mapped[list["CourseSection"]] = relationship(
+        back_populates="course",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="CourseSection.position",
     )

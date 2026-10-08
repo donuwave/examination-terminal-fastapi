@@ -19,6 +19,9 @@ class CourseTestAssociation(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("course.id"))
     test_id: Mapped[int] = mapped_column(ForeignKey("test.id"))
+    section_id: Mapped[int | None] = mapped_column(
+        ForeignKey("course_section.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     test: Mapped["Test"] = relationship(back_populates="courses")
     course: Mapped["Course"] = relationship(back_populates="tests")

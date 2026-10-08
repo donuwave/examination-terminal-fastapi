@@ -17,6 +17,7 @@ class MaterialGet(BaseModel):
 
     id: int
     course_id: int
+    section_id: int | None = None
     title: str
     description: str
     created_at: datetime

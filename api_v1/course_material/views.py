@@ -12,7 +12,7 @@ from api_v1.course_material.dependencies import (
     get_course_for_teacher,
 )
 from api_v1.course_material.schemas import MaterialGet
-from core.models import Course, CourseMaterial, MaterialFile, db_helper
+from core.models import Course, CourseMaterial, CourseSection, MaterialFile, db_helper
 
 http_bearer = HTTPBearer()
 router = APIRouter(tags=["CourseMaterial"], dependencies=[Depends(http_bearer)])
@@ -39,10 +39,17 @@ async def get_materials(
 async def create_material(
     title: str = Form(min_length=1, max_length=200),
     description: str = Form(""),
+    section_id: int = Form(),
     files: List[UploadFile] = File(default=[]),
     course: Course = Depends(get_course_for_teacher),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
+    section = await session.get(CourseSection, section_id)
+    if section is None or section.course_id != course.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Раздел не относится к этому курсу"
+        )
+
     files = [item for item in files if item.filename]
     if len(files) > storage.MAX_FILES:
         raise HTTPException(
@@ -65,6 +72,7 @@ async def create_material(
 
         material = CourseMaterial(
             course_id=course.id,
+            section_id=section.id,
             title=title.strip(),
             description=description.strip(),
             files=saved,
