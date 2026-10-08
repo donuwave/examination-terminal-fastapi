@@ -47,8 +47,11 @@ def to_view(
     view = TestProgressTest.model_validate(progress, from_attributes=True)
     view.remaining_time = seconds_left(progress)
     view.state = state
-    if not (reveal and progress.status == FINISHED):
-        for item in view.result_test:
+    finished = progress.status == FINISHED
+    for item in view.result_test:
+        if finished:
+            item.is_correct = item.student_answer is not None and item.student_answer == item.correct_answer
+        if not (reveal and finished):
             item.correct_answer = None
     return view
 

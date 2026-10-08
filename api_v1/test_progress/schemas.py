@@ -31,6 +31,8 @@ class TestProgressResultTest(BaseModel):
     # Правильные ответы открываются, когда тест сдан или попытки закончились.
     correct_answer: Optional[str] = None
     student_answer: Optional[str] = None
+    # Верен ли ответ: заполняется после завершения, даже если сам правильный ответ скрыт.
+    is_correct: Optional[bool] = None
 
 
 class TestProgressTest(BaseModel):
