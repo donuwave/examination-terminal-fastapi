@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,3 +35,12 @@ async def update_profile(
     return await profile_crud.update_profile(
         profile_update=profile_update, session=session, user_id=user_id
     )
+
+
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    user_id: int = Depends(get_user_id_in_access_token),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Удаляет аккаунт текущего пользователя."""
+    await profile_crud.delete_account(session=session, user_id=user_id)

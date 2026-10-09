@@ -172,3 +172,24 @@ async def test_teacher_results_show_every_student(world):
     assert by_email["alice@test.dev"]["status"] == "passed"
     assert by_email["alice@test.dev"]["best_percent"] == 100
     assert by_email["bob@test.dev"]["status"] == "new"
+
+
+async def test_student_can_delete_account_with_history(world):
+    alice = world["alice"]
+    await finish(alice, await start(alice, world))
+
+    assert (await alice.delete("/api/v1/profile/")).status_code == 204
+
+    # Прежний токен больше не открывает профиль, а курс остался у остальных.
+    assert (await alice.get("/api/v1/profile/me")).status_code in (401, 404)
+    results = await world["teacher"].get(
+        f"{PROGRESS}/results",
+        params={"course_id": world["course_id"], "test_id": world["test_id"]},
+    )
+    assert [row["student"]["email"] for row in results.json()] == ["bob@test.dev"]
+
+
+async def test_teacher_with_courses_cannot_delete_account(world):
+    response = await world["teacher"].delete("/api/v1/profile/")
+    assert response.status_code == 409
+    assert (await world["teacher"].get("/api/v1/profile/me")).status_code == 200
