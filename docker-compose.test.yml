@@ -1,16 +1,10 @@
-version: '3.8'
-
 services:
   db_test:
-    image: postgres:latest
+    image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: "qwerty"
       POSTGRES_DB: "test_db"
     ports:
       - "5438:5432"
-    volumes:
-      - db_test_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-volumes:
-  db_test_data:
+    tmpfs:
+      - /var/lib/postgresql/data

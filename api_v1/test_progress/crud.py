@@ -4,14 +4,15 @@ from collections import defaultdict
 from typing import List
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import distinct, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, noload, selectinload
 
 from api_v1.course_section.state import course_progress
 from api_v1.test_progress.rules import (
     FINISHED,
     STARTED,
+    close_expired,
     compute_state,
     finalize,
     load_attempts,
@@ -22,6 +23,7 @@ from api_v1.test_progress.rules import (
 )
 from api_v1.test_progress.schemas import (
     AnswerIn,
+    AttemptStats,
     StudentBrief,
     TestProgressTest,
     TestResultRow,
@@ -68,20 +70,30 @@ async def view_attempt(session: AsyncSession, progress: TestProgress) -> TestPro
     return to_view(progress, state, reveal_answers(state))
 
 
-async def list_attempts(session: AsyncSession, user_id: int) -> List[TestProgressTest]:
-    """Все попытки студента по всем курсам, от свежих к старым."""
-    attempts = (
+async def list_attempts(
+    session: AsyncSession,
+    user_id: int,
+    limit: int,
+    offset: int = 0,
+    finished_from: int | None = None,
+    finished_to: int | None = None,
+) -> List[TestProgressTest]:
+    """Попытки студента от свежих к старым, страницей.
+
+    Видимость правильных ответов зависит от всех попыток по тесту, поэтому состояние
+    считаем по облегчённой выборке без ответов, а ответы подгружаем только для страницы.
+    """
+    await close_expired(session, user_id)
+
+    everything = (
         await session.scalars(
             select(TestProgress)
             .where(TestProgress.participant_id == user_id)
-            .options(selectinload(TestProgress.result_test))
-            .order_by(TestProgress.id.desc())
+            .options(noload(TestProgress.result_test))
         )
     ).all()
-
     grouped: dict[tuple[int, int], list[TestProgress]] = defaultdict(list)
-    for attempt in attempts:
-        await sync_state(session, attempt)
+    for attempt in everything:
         grouped[(attempt.course_id, attempt.test_id)].append(attempt)
 
     extras_rows = await session.execute(
@@ -91,12 +103,43 @@ async def list_attempts(session: AsyncSession, user_id: int) -> List[TestProgres
     )
     extras = {(course_id, test_id): extra for course_id, test_id, extra in extras_rows.all()}
 
+    query = select(TestProgress).where(TestProgress.participant_id == user_id)
+    if finished_from is not None:
+        query = query.where(TestProgress.finished_at >= finished_from)
+    if finished_to is not None:
+        query = query.where(TestProgress.finished_at < finished_to)
+    page = (
+        await session.scalars(
+            query.options(selectinload(TestProgress.result_test))
+            .order_by(TestProgress.id.desc())
+            .limit(limit)
+            .offset(offset)
+            # Подгруженные облегчённо попытки уже в сессии без ответов: перечитываем их.
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+
     result = []
-    for attempt in attempts:
+    for attempt in page:
         key = (attempt.course_id, attempt.test_id)
         state = compute_state(attempt.test, grouped[key], extras.get(key, 0))
         result.append(to_view(attempt, None, reveal_answers(state)))
     return result
+
+
+async def attempt_stats(session: AsyncSession, user_id: int) -> AttemptStats:
+    await close_expired(session, user_id)
+    finished = await session.scalar(
+        select(func.count(TestProgress.id)).where(
+            TestProgress.participant_id == user_id, TestProgress.status == FINISHED
+        )
+    )
+    passed_tests = await session.scalar(
+        select(func.count(distinct(tuple_(TestProgress.course_id, TestProgress.test_id)))).where(
+            TestProgress.participant_id == user_id, TestProgress.passed.is_(True)
+        )
+    )
+    return AttemptStats(finished=finished or 0, passed_tests=passed_tests or 0)
 
 
 def _apply_answers(progress: TestProgress, answers: List[AnswerIn]) -> None:

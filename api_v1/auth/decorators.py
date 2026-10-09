@@ -36,9 +36,6 @@ def role_required(role_name: str):
             credentials: HTTPAuthorizationCredentials = await http_bearer(request)
 
             payload = await get_current_token_payload(credentials=credentials)
-            session_gen = db_helper.scoped_session_dependency()
-            session: AsyncSession = await session_gen.__anext__()
-
             role_id = payload.get("role_id")
 
             if role_id is None:
@@ -47,7 +44,18 @@ def role_required(role_name: str):
                     detail="Role ID is missing in the token",
                 )
 
-            role_list = await crud.get_role_list(session=session)
+            # Сессию берём как зависимость и обязательно доводим генератор до конца,
+            # иначе соединение остаётся открытым и копится в пуле.
+            dependency = request.app.dependency_overrides.get(
+                db_helper.scoped_session_dependency, db_helper.scoped_session_dependency
+            )
+            session_gen = dependency()
+            session: AsyncSession = await session_gen.__anext__()
+            try:
+                role_list = await crud.get_role_list(session=session)
+            finally:
+                await anext(session_gen, None)
+
             expected_role = next(
                 (role for role in role_list if role.name == role_name), None
             )

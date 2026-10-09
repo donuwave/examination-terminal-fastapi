@@ -97,3 +97,8 @@ class TestResultRow(BaseModel):
     best_percent: Optional[int] = None
     last_attempt_id: Optional[int] = None
     last_finished_at: Optional[int] = None
+
+
+class AttemptStats(BaseModel):
+    finished: int
+    passed_tests: int

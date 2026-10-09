@@ -35,22 +35,44 @@ def percent_of(progress: TestProgress) -> int:
     return round(correct_count(progress) * 100 / total) if total else 0
 
 
-async def finalize(session: AsyncSession, progress: TestProgress) -> None:
+async def finalize(
+    session: AsyncSession, progress: TestProgress, finished_at: int | None = None
+) -> None:
     """Завершает попытку и решает, сдан ли тест."""
     total = len(progress.result_test)
     correct = correct_count(progress)
     progress.status = FINISHED
-    progress.finished_at = int(time.time())
+    progress.finished_at = finished_at if finished_at is not None else int(time.time())
     progress.count_current_answer = correct
     progress.passed = bool(total) and correct * 100 >= progress.test.pass_percent * total
     await session.commit()
 
 
 async def sync_state(session: AsyncSession, progress: TestProgress) -> TestProgress:
-    """Если время идущей попытки вышло, засчитываем её по сохранённым ответам."""
+    """Если время идущей попытки вышло, засчитываем её по сохранённым ответам.
+
+    Завершение датируем концом отведённого времени, а не моментом, когда студент вернулся:
+    от него считается пауза до пересдачи и день в ленте активности.
+    """
     if progress.status == STARTED and seconds_left(progress) == 0:
-        await finalize(session, progress)
+        await finalize(session, progress, finished_at=progress.attempt_date + progress.timelimit)
     return progress
+
+
+async def close_expired(session: AsyncSession, student_id: int) -> None:
+    """Закрывает все просроченные попытки студента: ни одна не остаётся «идущей» навсегда."""
+    now = int(time.time())
+    started = await session.scalars(
+        select(TestProgress)
+        .where(
+            TestProgress.participant_id == student_id,
+            TestProgress.status == STARTED,
+            TestProgress.attempt_date + TestProgress.timelimit <= now,
+        )
+        .options(selectinload(TestProgress.result_test))
+    )
+    for attempt in started.all():
+        await sync_state(session, attempt)
 
 
 async def load_attempts(

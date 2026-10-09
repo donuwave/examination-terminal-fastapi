@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from api_v1.test_progress import crud
 from api_v1.test_progress.dependencies import get_progress_test
 from api_v1.test_progress.schemas import (
     AnswerIn,
+    AttemptStats,
     GrantIn,
     StartIn,
     TestProgressTest,
@@ -24,11 +25,31 @@ router = APIRouter(tags=["TestProgress"], dependencies=[Depends(http_bearer)])
 
 @router.get("/", response_model=List[TestProgressTest])
 async def get_my_attempts(
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    finished_from: int | None = Query(None, description="Unix-секунды, включительно"),
+    finished_to: int | None = Query(None, description="Unix-секунды, не включая"),
     user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
-    """Все попытки текущего студента."""
-    return await crud.list_attempts(session=session, user_id=user_id)
+    """Попытки текущего студента от свежих к старым. Постранично, с фильтром по дате завершения."""
+    return await crud.list_attempts(
+        session=session,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+        finished_from=finished_from,
+        finished_to=finished_to,
+    )
+
+
+@router.get("/stats", response_model=AttemptStats)
+async def get_my_stats(
+    user_id: int = Depends(get_user_id_in_access_token),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Сколько завершённых попыток у студента и сколько тестов он сдал."""
+    return await crud.attempt_stats(session=session, user_id=user_id)
 
 
 @router.post("/start", response_model=TestProgressTest)
