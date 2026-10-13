@@ -14,6 +14,7 @@ from api_v1.course.schemas import (
 )
 from api_v1.course_section.state import course_progress
 from api_v1.profile.schemas import ProfileGet
+from api_v1.course_request.crud import pending_by_course
 from api_v1.profile import crud as crud_profile
 from api_v1.profile.crud import get_profile
 from api_v1.course_material.storage import delete_files
@@ -38,6 +39,7 @@ async def create_course(
     description: str,
     user_id: int,
     category_id: Optional[int] = None,
+    enrollment: str = "open",
 ):
     if category_id is not None and await session.get(CourseCategory, category_id) is None:
         raise HTTPException(
@@ -45,7 +47,11 @@ async def create_course(
         )
 
     course = Course(
-        name=name, description=description, teacher_id=user_id, category_id=category_id
+        name=name,
+        description=description,
+        teacher_id=user_id,
+        category_id=category_id,
+        enrollment=enrollment,
     )
     session.add(course)
     await session.commit()
@@ -101,24 +107,12 @@ async def update_course(
     course: CourseGet, session: AsyncSession, course_update: CourseUpdatePartial
 ):
     for name, value in course_update.model_dump(exclude_unset=True).items():
+        if name == "enrollment" and value is None:
+            continue
         setattr(course, name, value)
 
     await session.commit()
     return course
-
-
-async def add_student_in_course(
-    student_ids: Union[int, list[int]], session: AsyncSession, course
-):
-    students = [
-        await crud_profile.get_profile(session=session, user_id=single_id)
-        for single_id in student_ids
-    ]
-
-    for student in students:
-        course.students.append(CourseStudentAssociation(student=student))
-
-    await session.commit()
 
 
 async def delete_student_in_course(student_id: int, session: AsyncSession, course):
@@ -180,6 +174,7 @@ async def get_catalog(
         )
 
     courses = (await session.scalars(state)).all()
+    requests = await pending_by_course(session, user_id)
     return [
         CatalogCourse(
             id=course.id,
@@ -191,6 +186,8 @@ async def get_catalog(
             tests_count=len(course.tests),
             is_member=course.teacher_id == user_id
             or any(assoc.profile_id == user_id for assoc in course.students),
+            enrollment=course.enrollment,
+            my_request=requests.get(course.id),
         )
         for course in courses
     ]
@@ -201,6 +198,11 @@ async def enroll_student(session: AsyncSession, course_id: int, user_id: int):
     if course is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Курс не найден"
+        )
+    if course.enrollment != "open":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="На этот курс записываются по заявке",
         )
 
     already = await session.scalar(

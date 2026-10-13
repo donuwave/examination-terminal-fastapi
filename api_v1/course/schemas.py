@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -20,6 +20,7 @@ class CourseBase(BaseModel):
     teacher_id: int
     teacher: ProfileGet
     category: Optional[CategoryGet] = None
+    enrollment: Literal["open", "request"] = "open"
 
 
 class Course(CourseBase):
@@ -55,6 +56,7 @@ class CourseUpdatePartial(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[int] = None
+    enrollment: Optional[Literal["open", "request"]] = None
 
 
 class CatalogCourse(BaseModel):
@@ -70,6 +72,9 @@ class CatalogCourse(BaseModel):
     students_count: int
     tests_count: int
     is_member: bool
+    enrollment: Literal["open", "request"] = "open"
+    # Есть ли у студента ожидающая решения заявка на курс или приглашение от преподавателя.
+    my_request: Optional[Literal["application", "invitation"]] = None
 
 
 class NextTest(BaseModel):

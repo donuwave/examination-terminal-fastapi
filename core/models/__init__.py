@@ -15,6 +15,7 @@ __all__ = (
     "Question",
     "TestProgress",
     "TestExtraAttempt",
+    "CourseRequest",
     "DatabaseHelper",
     "db_helper",
 )
@@ -35,3 +36,4 @@ from .test_question import TestQuestionAssociation
 from .question import Question
 from .test_progress import TestProgress
 from .test_extra_attempt import TestExtraAttempt
+from .course_request import CourseRequest

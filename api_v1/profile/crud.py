@@ -9,6 +9,7 @@ from sqlalchemy.orm import joinedload
 from api_v1.profile.schemas import ProfileGet, ProfileUpdate
 from core.models import (
     Course,
+    CourseRequest,
     CourseStudentAssociation,
     Profile,
     Test,
@@ -89,6 +90,7 @@ async def delete_account(session: AsyncSession, user_id: int) -> None:
     await session.execute(
         delete(CourseStudentAssociation).where(CourseStudentAssociation.profile_id == user_id)
     )
+    await session.execute(delete(CourseRequest).where(CourseRequest.student_id == user_id))
     await session.execute(delete(User).where(User.profile_id == user_id))
     await session.execute(delete(Profile).where(Profile.id == user_id))
     await session.commit()

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Literal, List, Optional
 
 from fastapi import APIRouter, Depends, Form, Request, Query
 from fastapi.security import HTTPBearer
@@ -81,6 +81,7 @@ async def create_course(
     name: str = Form(),
     description: str = Form(),
     category_id: Optional[int] = Form(None),
+    enrollment: Literal["open", "request"] = Form("open"),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await course_crud.create_course(
@@ -89,6 +90,7 @@ async def create_course(
         name=name,
         description=description,
         category_id=category_id,
+        enrollment=enrollment,
     )
 
 
@@ -128,21 +130,6 @@ async def delete_course(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await course_crud.delete_course(course=course, session=session)
-
-
-@router.post("/{course_id}/add_student",
-    dependencies=[Depends(get_course_for_teacher)],
-)
-@role_required("Преподаватель")
-async def add_student_in_course(
-    request: Request,
-    student_ids: List[int],
-    course: CourseGet = Depends(get_course_by_id),
-    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
-):
-    return await course_crud.add_student_in_course(
-        course=course, session=session, student_ids=student_ids
-    )
 
 
 @router.post("/{course_id}/delete_student",

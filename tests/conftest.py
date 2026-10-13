@@ -42,6 +42,15 @@ class Api:
         return getattr(self.client, name)
 
 
+async def join_by_invitation(teacher: Api, student: Api, course_id: int) -> None:
+    """Студента нельзя записать напрямую: преподаватель приглашает, студент принимает."""
+    me = (await student.get("/api/v1/profile/me")).json()
+    invite = await teacher.post(f"/api/v1/course/{course_id}/invite", json={"email": me["email"]})
+    assert invite.status_code == 201, invite.text
+    accept = await student.post(f"/api/v1/invitations/{invite.json()['id']}/accept")
+    assert accept.status_code == 200, accept.text
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def database():
     await recreate_schema()
@@ -99,9 +108,8 @@ async def world():
     assert (
         await teacher.post(f"/api/v1/course/{course_id}/sections/{section_id}/tests", json=[test_id])
     ).status_code == 204
-    assert (
-        await teacher.post(f"/api/v1/course/{course_id}/add_student", json=[alice.id, bob.id])
-    ).status_code == 200
+    for student in (alice, bob):
+        await join_by_invitation(teacher, student, course_id)
 
     yield {
         "teacher": teacher,

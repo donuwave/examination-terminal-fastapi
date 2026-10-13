@@ -18,6 +18,11 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
 
+    # open: записаться можно сразу; request: только по заявке, которую одобряет преподаватель.
+    enrollment: Mapped[str] = mapped_column(
+        String, nullable=False, default="open", server_default="open"
+    )
+
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("course_category.id"), nullable=True, index=True
     )
