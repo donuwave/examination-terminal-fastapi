@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api_v1.notification import service as notifications
 from core.models import Course, CourseRequest, CourseStudentAssociation, Profile, Role, User
 from core.models.course_request import (
     ACCEPTED,
@@ -79,6 +80,15 @@ async def apply(session: AsyncSession, course: Course, student_id: int) -> Cours
 
     request = CourseRequest(course_id=course.id, student_id=student_id, kind=APPLICATION)
     session.add(request)
+    student = await session.get(Profile, student_id)
+    await notifications.notify(
+        session,
+        course.teacher_id,
+        notifications.NEW_APPLICATION,
+        "Новая заявка на курс",
+        f"{notifications.person_name(student)} хочет записаться на курс «{course.name}»",
+        f"/courses/{course.id}",
+    )
     await session.commit()
     return await _reload(session, request)
 
@@ -114,6 +124,15 @@ async def invite(session: AsyncSession, course: Course, email: str) -> CourseReq
 
     request = CourseRequest(course_id=course.id, student_id=student.id, kind=INVITATION)
     session.add(request)
+    teacher = await session.get(Profile, course.teacher_id)
+    await notifications.notify(
+        session,
+        student.id,
+        notifications.INVITATION,
+        "Приглашение на курс",
+        f"{notifications.person_name(teacher)} приглашает вас на курс «{course.name}»",
+        "/",
+    )
     await session.commit()
     return await _reload(session, request)
 
@@ -145,6 +164,14 @@ async def decide_application(
     if approve:
         await _admit(session, course_id, request.student_id)
     _close(request, ACCEPTED if approve else DECLINED)
+    await notifications.notify(
+        session,
+        request.student_id,
+        notifications.APPLICATION_DECIDED,
+        "Заявка одобрена" if approve else "Заявка отклонена",
+        f"Преподаватель {'одобрил' if approve else 'отклонил'} вашу заявку на курс «{request.course.name}»",
+        f"/courses/{course_id}" if approve else "/courses?scope=all",
+    )
     await session.commit()
     return request
 
@@ -185,6 +212,15 @@ async def answer_invitation(
     if accept:
         await _admit(session, request.course_id, student_id)
     _close(request, ACCEPTED if accept else DECLINED)
+    await notifications.notify(
+        session,
+        request.course.teacher_id,
+        notifications.INVITATION_ANSWERED,
+        "Ответ на приглашение",
+        f"{notifications.person_name(request.student)} "
+        f"{'принял приглашение на курс' if accept else 'отклонил приглашение на курс'} «{request.course.name}»",
+        f"/courses/{request.course_id}",
+    )
     await session.commit()
     return request
 

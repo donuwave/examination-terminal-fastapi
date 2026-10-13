@@ -51,6 +51,10 @@ class TestProgress(Base):
     attempt_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     finished_at: Mapped[int] = mapped_column(BigInteger, nullable=True)
     passed: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    # Студента уже известили, что пауза перед пересдачей закончилась.
+    pause_notified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     result_test: Mapped[List["TestProgressResult"]] = relationship(
         "TestProgressResult",
         back_populates="test_progress",

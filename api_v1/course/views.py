@@ -143,7 +143,7 @@ async def delete_student_in_course(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await course_crud.delete_student_in_course(
-        student_id=student_id, session=session, course=course
+        student_id=student_id, session=session, course=course, by_teacher=True
     )
 
 

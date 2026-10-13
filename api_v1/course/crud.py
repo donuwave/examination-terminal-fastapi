@@ -15,6 +15,7 @@ from api_v1.course.schemas import (
 from api_v1.course_section.state import course_progress
 from api_v1.profile.schemas import ProfileGet
 from api_v1.course_request.crud import pending_by_course
+from api_v1.notification import service as notifications
 from api_v1.profile import crud as crud_profile
 from api_v1.profile.crud import get_profile
 from api_v1.course_material.storage import delete_files
@@ -115,7 +116,9 @@ async def update_course(
     return course
 
 
-async def delete_student_in_course(student_id: int, session: AsyncSession, course):
+async def delete_student_in_course(
+    student_id: int, session: AsyncSession, course, by_teacher: bool = False
+):
     student = await crud_profile.get_profile(session=session, user_id=student_id)
     association_to_remove = next(
         (assoc for assoc in course.students if assoc.profile_id == student.id), None
@@ -128,6 +131,15 @@ async def delete_student_in_course(student_id: int, session: AsyncSession, cours
         )
 
     await session.delete(association_to_remove)
+    if by_teacher:
+        await notifications.notify(
+            session,
+            student.id,
+            notifications.REMOVED,
+            "Вас убрали из курса",
+            f"Преподаватель убрал вас из курса «{course.name}». Ваши результаты сохранены",
+            "/courses",
+        )
     await session.commit()
 
 

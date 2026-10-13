@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from api_v1.test_progress.schemas import TestState
-from core.models import Test, TestExtraAttempt, TestProgress
+from api_v1.notification import service as notifications
+from core.models import Course, Profile, Test, TestExtraAttempt, TestProgress
 
 STARTED, FINISHED = 2, 3
 
@@ -45,7 +46,35 @@ async def finalize(
     progress.finished_at = finished_at if finished_at is not None else int(time.time())
     progress.count_current_answer = correct
     progress.passed = bool(total) and correct * 100 >= progress.test.pass_percent * total
+    await _tell_teacher_if_out(session, progress)
     await session.commit()
+
+
+async def _tell_teacher_if_out(session: AsyncSession, progress: TestProgress) -> None:
+    """Если после этой попытки у студента не осталось попыток, преподавателю нужно решить, что дальше."""
+    if progress.passed:
+        return
+    attempts = await load_attempts(
+        session, progress.course_id, progress.participant_id, progress.test_id
+    )
+    extras = await load_extras(session, progress.course_id, progress.participant_id)
+    state = compute_state(
+        progress.test, attempts.get(progress.test_id, []), extras.get(progress.test_id, 0)
+    )
+    if state.status != "waiting":
+        return
+
+    course = await session.get(Course, progress.course_id)
+    student = await session.get(Profile, progress.participant_id)
+    await notifications.notify(
+        session,
+        course.teacher_id,
+        notifications.ATTEMPTS_OUT,
+        "Нужно ваше решение",
+        f"У студента {notifications.person_name(student)} закончились попытки теста "
+        f"«{progress.test.name}» в курсе «{course.name}»",
+        f"/courses/{course.id}/tests/{progress.test_id}/results",
+    )
 
 
 async def sync_state(session: AsyncSession, progress: TestProgress) -> TestProgress:

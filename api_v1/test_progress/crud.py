@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, noload, selectinload
 
 from api_v1.course_section.state import course_progress
+from api_v1.notification import service as notifications
 from api_v1.test_progress.rules import (
     FINISHED,
     STARTED,
@@ -380,4 +381,13 @@ async def grant_extra_attempt(
         )
     else:
         record.extra += 1
+    course = await session.get(Course, course_id)
+    await notifications.notify(
+        session,
+        student_id,
+        notifications.EXTRA_ATTEMPT,
+        "Дополнительная попытка",
+        f"Преподаватель дал вам ещё одну попытку теста «{test.name}» в курсе «{course.name}»",
+        f"/courses/{course_id}",
+    )
     await session.commit()
