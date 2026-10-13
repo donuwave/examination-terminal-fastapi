@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from .analytics.views import router as analytics_router
 from .auth.views import router as auth_router
 from .role.views import router as role_router
 from .profile.views import router as profile_router
@@ -19,6 +20,7 @@ router.include_router(course_router, prefix="/course")
 router.include_router(course_material_router, prefix="/course")
 router.include_router(course_section_router, prefix="/course")
 router.include_router(course_request_router, prefix="/course")
+router.include_router(analytics_router, prefix="/course")
 router.include_router(invitations_router, prefix="/invitations")
 router.include_router(test_router, prefix="/tests")
 router.include_router(test_progress_router, prefix="/test-progress")
