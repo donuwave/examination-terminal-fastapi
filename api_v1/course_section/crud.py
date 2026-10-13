@@ -159,10 +159,12 @@ async def reorder_sections(session: AsyncSession, course_id: int, ids: List[int]
 
 
 async def add_tests(
-    session: AsyncSession, section: CourseSection, test_ids: List[int]
+    session: AsyncSession, section: CourseSection, test_ids: List[int], author_id: int
 ) -> None:
+    """Добавлять в курс можно только свои тесты: чужой тест нельзя ни подключить, ни подсмотреть."""
     for test_id in test_ids:
-        if await session.get(Test, test_id) is None:
+        test = await session.get(Test, test_id)
+        if test is None or test.creator_id != author_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Тест не найден")
 
         assoc = await session.scalar(

@@ -3,7 +3,7 @@ from datetime import timedelta
 from typing import Optional
 
 import pytz
-from fastapi import Depends, Form, HTTPException, status
+from fastapi import Depends, Form, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from api_v1.auth.schemas import AuthBase
 from api_v1.auth.utils import hash_password, validate_password, encode_jwt, decode_jwt
 from api_v1.profile import crud as profile_crud, crud
 from core.config import settings
+from core.rate_limit import login_limiter, registration_limiter
 from core.models import User, db_helper
 
 
@@ -48,12 +49,20 @@ async def create_token(
     )
 
 
+def client_key(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 async def register_user(
+    request: Request,
     email: EmailStr = Form(),
     role_id: int = Form(),
     password: str = Form(),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ) -> User:
+    registration_limiter.check(client_key(request))
+    registration_limiter.hit(client_key(request))
+
     existing_user = await auth_crud.get_user_by_email(email=email, session=session)
 
     if existing_user:
@@ -77,18 +86,24 @@ async def register_user(
 
 
 async def validate_auth_user(
-    user: User = Depends(auth_crud.get_user_by_email), password: str = Form()
+    request: Request,
+    email: EmailStr = Form(),
+    user: User = Depends(auth_crud.get_user_by_email),
+    password: str = Form(),
 ):
     authed_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль"
     )
 
-    if not user:
+    # Считаем неудачи отдельно по паре «адрес и почта»: чужой перебор не блокирует вход владельцу.
+    key = f"{client_key(request)}:{email.lower()}"
+    login_limiter.check(key)
+
+    if not user or not validate_password(password_user=password, hashed_password=user.password):
+        login_limiter.hit(key)
         raise authed_exc
 
-    if not validate_password(password_user=password, hashed_password=user.password):
-        raise authed_exc
-
+    login_limiter.reset(key)
     return user
 
 

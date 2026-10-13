@@ -11,9 +11,10 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 import httpx  # noqa: E402
 import pytest_asyncio  # noqa: E402
 
-from core.models import db_helper  # noqa: E402
+from core.models import Role, db_helper  # noqa: E402
+from core.rate_limit import login_limiter, registration_limiter  # noqa: E402
 from main import app  # noqa: E402
-from tests.test_db import get_test_db, recreate_schema, test_engine  # noqa: E402
+from tests.test_db import TestSessionLocal, get_test_db, recreate_schema, test_engine  # noqa: E402
 
 app.dependency_overrides[db_helper.scoped_session_dependency] = get_test_db
 
@@ -44,6 +45,12 @@ class Api:
 @pytest_asyncio.fixture(autouse=True)
 async def database():
     await recreate_schema()
+    # Роли в рабочей базе создаёт миграция; в тестовой схеме без миграций кладём их сами.
+    async with TestSessionLocal() as session:
+        session.add_all([Role(name="Преподаватель"), Role(name="Студент")])
+        await session.commit()
+    login_limiter.reset()
+    registration_limiter.reset()
     yield
     await test_engine.dispose()
 
@@ -53,8 +60,6 @@ async def world():
     """Преподаватель с курсом, разделом, тестом на 2 вопроса и два записанных студента."""
     transport = httpx.ASGITransport(app=app)
     anon = httpx.AsyncClient(transport=transport, base_url="http://test")
-    for role in ("Преподаватель", "Студент"):
-        assert (await anon.post("/api/v1/role/", data={"role_name": role})).status_code == 200
     roles = {item["name"]: item["id"] for item in (await anon.get("/api/v1/role/")).json()}
 
     teacher = await Api(transport).register("teacher@test.dev", roles["Преподаватель"])
@@ -91,9 +96,6 @@ async def world():
 
     section = await teacher.post(f"/api/v1/course/{course_id}/sections", json={"title": "Основы"})
     section_id = section.json()["id"]
-    assert (
-        await teacher.post(f"/api/v1/course/{course_id}/add_test", json=[test_id])
-    ).status_code == 200
     assert (
         await teacher.post(f"/api/v1/course/{course_id}/sections/{section_id}/tests", json=[test_id])
     ).status_code == 204

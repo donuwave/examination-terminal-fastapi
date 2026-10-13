@@ -11,13 +11,6 @@ http_bearer = HTTPBearer()
 router = APIRouter(tags=["Profile"], dependencies=[Depends(http_bearer)])
 
 
-@router.get("/", response_model=list[ProfileGet])
-async def get_list_profile(
-    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
-):
-    return await profile_crud.get_list_profile(session=session)
-
-
 @router.get("/me", response_model=ProfileGet)
 async def get_profile(
     user_id: int = Depends(get_user_id_in_access_token),

@@ -14,7 +14,6 @@ from api_v1.course.schemas import (
 )
 from api_v1.course_section.state import course_progress
 from api_v1.profile.schemas import ProfileGet
-from api_v1.course_test.dependencies import get_test
 from api_v1.profile import crud as crud_profile
 from api_v1.profile.crud import get_profile
 from api_v1.course_material.storage import delete_files
@@ -106,19 +105,6 @@ async def update_course(
 
     await session.commit()
     return course
-
-
-async def add_test_in_course(
-    tests_ids: Union[int, list[int]], session: AsyncSession, course
-):
-    tests = [
-        await get_test(session=session, test_id=single_id) for single_id in tests_ids
-    ]
-
-    for test in tests:
-        course.tests.append(CourseTestAssociation(test=test))
-
-    await session.commit()
 
 
 async def add_student_in_course(

@@ -73,10 +73,11 @@ async def add_section_tests(
     section_id: int,
     test_ids: List[int],
     course: Course = Depends(get_course_for_teacher),
+    user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     section = await crud.get_section(session, course.id, section_id)
-    await crud.add_tests(session=session, section=section, test_ids=test_ids)
+    await crud.add_tests(session=session, section=section, test_ids=test_ids, author_id=user_id)
 
 
 @router.delete(

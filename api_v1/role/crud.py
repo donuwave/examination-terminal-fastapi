@@ -11,10 +11,3 @@ async def get_role_list(session: AsyncSession) -> List[Role]:
     result: Result = await session.execute(state)
     roles = result.scalars().all()
     return list(roles)
-
-
-async def create_role(session: AsyncSession, role_name: str):
-    role = Role(name=role_name)
-    session.add(role)
-    await session.commit()
-    return role
