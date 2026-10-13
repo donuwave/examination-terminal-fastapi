@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Request, Response, status
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,9 +9,10 @@ from api_v1.auth.dependencies import get_user_id_in_access_token
 from api_v1.course.dependencies import get_course_by_id
 from api_v1.course.schemas import CourseGet
 from api_v1.course_test import crud as test_crud
-from api_v1.course_test.dependencies import get_test
-from api_v1.course_test.schemas import TestGet
-from api_v1.questions.schemas import QuestionBase
+from api_v1.course_test.dependencies import get_own_test
+from api_v1.course_test.schemas import TestGet, TestUpdate
+from api_v1.questions import crud as question_crud
+from api_v1.questions.schemas import QuestionBase, QuestionGet, QuestionUpdatePartial
 from core.models import db_helper
 
 http_bearer = HTTPBearer()
@@ -27,9 +28,8 @@ async def get_tests(
 
 
 @router.get("/{test_id}", response_model=TestGet)
-async def get_test(
-    test: TestGet = Depends(get_test),
-):
+async def get_test_detail(test=Depends(get_own_test)):
+    """Тест с правильными ответами. Только для автора."""
     return test
 
 
@@ -61,9 +61,56 @@ async def create_test(
 async def add_questions_in_test(
     request: Request,
     questions: List[QuestionBase],
-    test: TestGet = Depends(get_test),
+    test=Depends(get_own_test),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
-    return await test_crud.add_questions_in_test(
-        test=test, session=session, questions=questions
+    return await test_crud.add_questions_in_test(test=test, session=session, questions=questions)
+
+
+@router.patch("/{test_id}", response_model=TestGet)
+@role_required("Преподаватель")
+async def update_test(
+    request: Request,
+    data: TestUpdate,
+    test=Depends(get_own_test),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await test_crud.update_test(session=session, test=test, data=data)
+
+
+@router.delete("/{test_id}", status_code=status.HTTP_204_NO_CONTENT)
+@role_required("Преподаватель")
+async def delete_test(
+    request: Request,
+    test=Depends(get_own_test),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    await test_crud.delete_test(session=session, test=test)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/{test_id}/questions/{question_id}", response_model=QuestionGet)
+@role_required("Преподаватель")
+async def update_question(
+    request: Request,
+    question_id: int,
+    data: QuestionUpdatePartial,
+    test=Depends(get_own_test),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    question = test_crud.find_question(test, question_id)
+    return await question_crud.update_question(
+        question_update=data, session=session, question=question
     )
+
+
+@router.delete("/{test_id}/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+@role_required("Преподаватель")
+async def delete_question(
+    request: Request,
+    question_id: int,
+    test=Depends(get_own_test),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    await test_crud.delete_question(session=session, test=test, question_id=question_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

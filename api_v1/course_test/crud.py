@@ -1,11 +1,19 @@
-from sqlalchemy import select, Result
+from fastapi import HTTPException, status
+from sqlalchemy import Result, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from api_v1.course_test.schemas import TestGet
+from api_v1.course_test.schemas import TestGet, TestUpdate
 
 from api_v1.questions import crud as crud_question
-from core.models import Test, TestQuestionAssociation
+from core.models import (
+    CourseTestAssociation,
+    Question,
+    Test,
+    TestExtraAttempt,
+    TestProgress,
+    TestQuestionAssociation,
+)
 
 
 async def get_list_test(session: AsyncSession, user_id: int):
@@ -54,4 +62,48 @@ async def add_questions_in_test(
         )
         test.questions.append(TestQuestionAssociation(question=question))
 
+    await session.commit()
+
+
+async def update_test(session: AsyncSession, test: Test, data: TestUpdate) -> Test:
+    for name, value in data.model_dump(exclude_unset=True, exclude_none=True).items():
+        setattr(test, name, value)
+    await session.commit()
+    return test
+
+
+async def delete_test(session: AsyncSession, test: Test) -> None:
+    """Удаляет тест вместе с вопросами. Тест с попытками студентов не трогаем, чтобы не потерять их результаты."""
+    attempts = await session.scalar(
+        select(func.count(TestProgress.id)).where(TestProgress.test_id == test.id)
+    )
+    if attempts:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="У теста есть попытки студентов. Уберите его из разделов, а не удаляйте",
+        )
+
+    question_ids = [assoc.question_id for assoc in test.questions]
+    await session.execute(delete(CourseTestAssociation).where(CourseTestAssociation.test_id == test.id))
+    await session.execute(delete(TestExtraAttempt).where(TestExtraAttempt.test_id == test.id))
+    await session.execute(delete(TestQuestionAssociation).where(TestQuestionAssociation.test_id == test.id))
+    if question_ids:
+        await session.execute(delete(Question).where(Question.id.in_(question_ids)))
+    await session.execute(delete(Test).where(Test.id == test.id))
+    await session.commit()
+
+
+def find_question(test: Test, question_id: int) -> Question:
+    for assoc in test.questions:
+        if assoc.question_id == question_id:
+            return assoc.question
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Вопроса нет в этом тесте")
+
+
+async def delete_question(session: AsyncSession, test: Test, question_id: int) -> None:
+    question = find_question(test, question_id)
+    await session.execute(
+        delete(TestQuestionAssociation).where(TestQuestionAssociation.question_id == question.id)
+    )
+    await session.execute(delete(Question).where(Question.id == question.id))
     await session.commit()

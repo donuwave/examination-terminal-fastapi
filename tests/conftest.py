@@ -108,5 +108,7 @@ async def world():
         "course_id": course_id,
         "test_id": test_id,
         "section_id": section_id,
+        "roles": roles,
+        "transport": transport,
     }
     await anon.aclose()
