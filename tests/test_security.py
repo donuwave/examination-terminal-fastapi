@@ -100,20 +100,20 @@ async def test_password_change_flow(world):
     await asyncio.sleep(1.1)
 
     wrong = await client.post(
-        "/api/v1/auth/password", json={"old_password": "nope", "new_password": "brand-new-1"}
+        "/api/v1/profile/password", json={"old_password": "nope", "new_password": "brand-new-1"}
     )
     assert wrong.status_code == 400
     same = await client.post(
-        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": PASSWORD}
+        "/api/v1/profile/password", json={"old_password": PASSWORD, "new_password": PASSWORD}
     )
     assert same.status_code == 400
     short = await client.post(
-        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": "123"}
+        "/api/v1/profile/password", json={"old_password": PASSWORD, "new_password": "123"}
     )
     assert short.status_code == 422
 
     changed = await client.post(
-        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": "brand-new-1"}
+        "/api/v1/profile/password", json={"old_password": PASSWORD, "new_password": "brand-new-1"}
     )
     assert changed.status_code == 200
     fresh = changed.json()
@@ -135,18 +135,18 @@ async def test_password_change_is_limited(world):
     client = world["alice"].client
     for _ in range(5):
         response = await client.post(
-            "/api/v1/auth/password", json={"old_password": "wrong", "new_password": "brand-new-1"}
+            "/api/v1/profile/password", json={"old_password": "wrong", "new_password": "brand-new-1"}
         )
         assert response.status_code == 400
     blocked = await client.post(
-        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": "brand-new-1"}
+        "/api/v1/profile/password", json={"old_password": PASSWORD, "new_password": "brand-new-1"}
     )
     assert blocked.status_code == 429
 
 
 async def test_password_change_needs_authorization(world):
     response = await world["alice"].client.post(
-        "/api/v1/auth/password",
+        "/api/v1/profile/password",
         json={"old_password": PASSWORD, "new_password": "brand-new-1"},
         headers={"Authorization": ""},
     )
