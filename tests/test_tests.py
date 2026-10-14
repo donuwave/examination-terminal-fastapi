@@ -94,3 +94,37 @@ async def test_unused_test_is_deleted_everywhere(world):
     assert (await teacher.get(f"{TESTS}/")).json() == []
     sections = (await teacher.get(f"/api/v1/course/{course_id}/sections")).json()
     assert sections[0]["tests"] == []
+
+
+async def test_new_questions_keep_order_and_return_ids(world):
+    teacher, test_id = world["teacher"], world["test_id"]
+    added = await teacher.post(
+        f"{TESTS}/{test_id}/add_questions",
+        json=[
+            {"text_question": "Третий", "options": ["a", "b"], "correct_answer": "a"},
+            {"text_question": "Четвёртый", "options": ["a", "b"], "correct_answer": "a"},
+        ],
+    )
+    ids = [item["id"] for item in added.json()]
+    assert len(ids) == 2
+    texts = [q["text_question"] for q in (await teacher.get(f"{TESTS}/{test_id}")).json()["questions"]]
+    assert texts == ["Вопрос 1", "Вопрос 2", "Третий", "Четвёртый"]
+
+
+async def test_questions_can_be_reordered(world):
+    teacher, test_id = world["teacher"], world["test_id"]
+    questions = (await teacher.get(f"{TESTS}/{test_id}")).json()["questions"]
+    ids = [q["id"] for q in questions]
+
+    reordered = await teacher.put(f"{TESTS}/{test_id}/questions/order", json=list(reversed(ids)))
+    assert reordered.status_code == 204
+    after = (await teacher.get(f"{TESTS}/{test_id}")).json()["questions"]
+    assert [q["id"] for q in after] == list(reversed(ids))
+
+    # Нужно передать все вопросы по одному разу.
+    for bad in ([ids[0]], ids + ids, [*ids, 99999], []):
+        assert (await teacher.put(f"{TESTS}/{test_id}/questions/order", json=bad)).status_code == 422
+    # Чужой преподаватель и студент порядок менять не могут.
+    other = await second_teacher(world)
+    assert (await other.put(f"{TESTS}/{test_id}/questions/order", json=ids)).status_code == 403
+    assert (await world["alice"].put(f"{TESTS}/{test_id}/questions/order", json=ids)).status_code == 403

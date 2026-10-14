@@ -27,5 +27,5 @@ class Test(Base):
 
     courses: Mapped[list["CourseTestAssociation"]] = relationship(back_populates="test")
     questions: Mapped[list["TestQuestionAssociation"]] = relationship(
-        back_populates="test"
+        back_populates="test", order_by="TestQuestionAssociation.position, TestQuestionAssociation.id"
     )

@@ -56,13 +56,19 @@ async def add_questions_in_test(
     session: AsyncSession,
     questions,
 ):
+    """Добавляет вопросы в конец теста и возвращает их id в порядке отправки."""
+    position = max((assoc.position for assoc in test.questions), default=0)
+    created = []
     for question_in in questions:
         question = await crud_question.create_question(
             session=session, question_in=question_in
         )
-        test.questions.append(TestQuestionAssociation(question=question))
+        position += 1
+        test.questions.append(TestQuestionAssociation(question=question, position=position))
+        created.append({"id": question.id})
 
     await session.commit()
+    return created
 
 
 async def update_test(session: AsyncSession, test: Test, data: TestUpdate) -> Test:
@@ -106,4 +112,17 @@ async def delete_question(session: AsyncSession, test: Test, question_id: int) -
         delete(TestQuestionAssociation).where(TestQuestionAssociation.question_id == question.id)
     )
     await session.execute(delete(Question).where(Question.id == question.id))
+    await session.commit()
+
+
+async def reorder_questions(session: AsyncSession, test: Test, ids: list[int]) -> None:
+    """Задаёт порядок вопросов. Передать нужно все вопросы теста, без лишних и повторов."""
+    current = {assoc.question_id: assoc for assoc in test.questions}
+    if len(ids) != len(set(ids)) or set(ids) != set(current):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нужно передать все вопросы теста по одному разу",
+        )
+    for position, question_id in enumerate(ids, start=1):
+        current[question_id].position = position
     await session.commit()

@@ -67,6 +67,19 @@ async def add_questions_in_test(
     return await test_crud.add_questions_in_test(test=test, session=session, questions=questions)
 
 
+@router.put("/{test_id}/questions/order", status_code=status.HTTP_204_NO_CONTENT)
+@role_required("Преподаватель")
+async def reorder_questions(
+    request: Request,
+    ids: List[int],
+    test=Depends(get_own_test),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Порядок вопросов в редакторе."""
+    await test_crud.reorder_questions(session=session, test=test, ids=ids)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.patch("/{test_id}", response_model=TestGet)
 @role_required("Преподаватель")
 async def update_test(
