@@ -130,6 +130,14 @@ async def get_current_auth_user_for_refresh(
     user = await auth_crud.get_item_user_by_id(session=session, user_id=user_id)
 
     if user is not None:
+        # Токены, выданные до смены пароля, больше не продлевают сессию.
+        changed = user.password_changed_at
+        if changed is not None and payload.get("iat", 0) < changed.replace(
+            tzinfo=datetime.timezone.utc
+        ).timestamp():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Пароль изменён, войдите снова"
+            )
         return user
 
     raise HTTPException(
@@ -157,5 +165,5 @@ async def create_refresh_token(user: User) -> str:
     return await create_token(
         token_type=REFRESH_TOKEN_TYPE,
         token_data=jwt_payload,
-        expire_minutes=settings.auth.refresh_token_expire_days,
+        expire_timedelta=timedelta(days=settings.auth.refresh_token_expire_days),
     )

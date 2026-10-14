@@ -1,3 +1,5 @@
+import asyncio
+
 from core.rate_limit import registration_limiter
 from tests.conftest import PASSWORD, Api
 from tests.test_tests import TESTS, second_teacher
@@ -88,3 +90,64 @@ async def test_registration_is_limited_per_address(world):
         assert statuses[-1] == 429
     finally:
         registration_limiter.limit = 10
+
+
+async def test_password_change_flow(world):
+    alice = world["alice"]
+    client = alice.client
+    refresh_before = (await login(client, "alice@test.dev", PASSWORD)).json()["refresh_token"]
+    # iat токена хранится в целых секундах, поэтому смену пароля разводим с выдачей токена на секунду.
+    await asyncio.sleep(1.1)
+
+    wrong = await client.post(
+        "/api/v1/auth/password", json={"old_password": "nope", "new_password": "brand-new-1"}
+    )
+    assert wrong.status_code == 400
+    same = await client.post(
+        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": PASSWORD}
+    )
+    assert same.status_code == 400
+    short = await client.post(
+        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": "123"}
+    )
+    assert short.status_code == 422
+
+    changed = await client.post(
+        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": "brand-new-1"}
+    )
+    assert changed.status_code == 200
+    fresh = changed.json()
+
+    # Старый пароль больше не работает, новый работает.
+    assert (await login(client, "alice@test.dev", PASSWORD)).status_code == 401
+    assert (await login(client, "alice@test.dev", "brand-new-1")).status_code == 200
+
+    # Токен, выданный до смены, не продлевает сессию; выданный после смены продлевает.
+    old = await client.post("/api/v1/auth/refresh", headers={"Authorization": f"Bearer {refresh_before}"})
+    assert old.status_code == 401
+    new = await client.post(
+        "/api/v1/auth/refresh", headers={"Authorization": f"Bearer {fresh['refresh_token']}"}
+    )
+    assert new.status_code == 200
+
+
+async def test_password_change_is_limited(world):
+    client = world["alice"].client
+    for _ in range(5):
+        response = await client.post(
+            "/api/v1/auth/password", json={"old_password": "wrong", "new_password": "brand-new-1"}
+        )
+        assert response.status_code == 400
+    blocked = await client.post(
+        "/api/v1/auth/password", json={"old_password": PASSWORD, "new_password": "brand-new-1"}
+    )
+    assert blocked.status_code == 429
+
+
+async def test_password_change_needs_authorization(world):
+    response = await world["alice"].client.post(
+        "/api/v1/auth/password",
+        json={"old_password": PASSWORD, "new_password": "brand-new-1"},
+        headers={"Authorization": ""},
+    )
+    assert response.status_code in (401, 403)

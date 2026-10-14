@@ -12,7 +12,7 @@ import httpx  # noqa: E402
 import pytest_asyncio  # noqa: E402
 
 from core.models import Role, db_helper  # noqa: E402
-from core.rate_limit import login_limiter, registration_limiter  # noqa: E402
+from core.rate_limit import login_limiter, password_limiter, registration_limiter  # noqa: E402
 from main import app  # noqa: E402
 from tests.test_db import TestSessionLocal, get_test_db, recreate_schema, test_engine  # noqa: E402
 
@@ -59,6 +59,7 @@ async def database():
         session.add_all([Role(name="Преподаватель"), Role(name="Студент")])
         await session.commit()
     login_limiter.reset()
+    password_limiter.reset()
     registration_limiter.reset()
     yield
     await test_engine.dispose()

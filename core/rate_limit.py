@@ -51,3 +51,5 @@ class RateLimiter:
 
 login_limiter = RateLimiter(5, 15 * 60, "Слишком много неудачных попыток входа")
 registration_limiter = RateLimiter(10, 60 * 60, "Слишком много регистраций с вашего адреса")
+
+password_limiter = RateLimiter(5, 15 * 60, "Слишком много неверных попыток смены пароля")
