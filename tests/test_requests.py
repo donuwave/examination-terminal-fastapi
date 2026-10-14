@@ -196,3 +196,16 @@ async def test_catalog_is_paged_and_reports_total(world):
     found = await alice.get(f"{COURSE}/catalog", params={"search": "Курс 3", "limit": 1})
     assert found.headers["x-total-count"] == "1" and len(found.json()) == 1
     assert (await alice.get(f"{COURSE}/catalog", params={"limit": 0})).status_code == 422
+
+
+async def test_course_with_student_attempts_can_be_deleted(world):
+    from tests.test_attempts import finish, start
+
+    alice = world["alice"]
+    await finish(alice, await start(alice, world))
+
+    response = await world["teacher"].delete(f"{COURSE}/{world['course_id']}")
+    assert response.status_code == 200
+    # Курс и попытки в нём исчезли, остальное у студента на месте.
+    assert (await alice.get("/api/v1/test-progress/")).json() == []
+    assert (await alice.get("/api/v1/profile/me")).status_code == 200

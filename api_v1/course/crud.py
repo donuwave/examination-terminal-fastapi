@@ -1,7 +1,7 @@
 from typing import Union, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import Result, asc, desc, func, or_, select
+from sqlalchemy import Result, asc, delete, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,7 +26,9 @@ from core.models import (
     CourseStudentAssociation,
     CourseTestAssociation,
     MaterialFile,
+    TestProgress,
 )
+from core.models.test_progress import TestProgressResult
 
 
 async def get_categories(session: AsyncSession) -> list[CourseCategory]:
@@ -154,6 +156,13 @@ async def delete_course(
             .where(CourseMaterial.course_id == course.id)
         )
     )
+
+    # Попытки студентов ссылаются на курс без каскада: без этого удаление курса падало бы с ошибкой.
+    attempts = select(TestProgress.id).where(TestProgress.course_id == course.id)
+    await session.execute(
+        delete(TestProgressResult).where(TestProgressResult.test_progress_id.in_(attempts))
+    )
+    await session.execute(delete(TestProgress).where(TestProgress.course_id == course.id))
 
     await session.delete(course)
     await session.commit()
