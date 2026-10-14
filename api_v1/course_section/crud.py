@@ -185,6 +185,7 @@ async def add_tests(
 
 
 async def remove_test(session: AsyncSession, section: CourseSection, test_id: int) -> None:
+    """Убирает тест из раздела. Попытки студентов остаются в истории, даже если тест уже проходили."""
     assoc = await session.scalar(
         select(CourseTestAssociation).where(
             CourseTestAssociation.course_id == section.course_id,
@@ -194,17 +195,6 @@ async def remove_test(session: AsyncSession, section: CourseSection, test_id: in
     )
     if assoc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Теста нет в этом разделе")
-
-    started = await session.scalar(
-        select(TestProgress.id)
-        .where(TestProgress.test_id == test_id, TestProgress.course_id == section.course_id)
-        .limit(1)
-    )
-    if started is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Этот тест студенты уже проходили. Убрать его нельзя",
-        )
 
     await session.delete(assoc)
     await session.commit()
