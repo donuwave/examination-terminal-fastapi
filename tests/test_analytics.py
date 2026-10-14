@@ -108,3 +108,90 @@ async def test_student_without_attempts_is_new(world):
     data = (await world["teacher"].get(f"{COURSE}/{world['course_id']}/analytics")).json()
     assert {row["status"] for row in data["students"]} == {"new"}
     assert data["tests"][0]["avg_best_percent"] is None
+
+
+async def view(student, world, material_id):
+    return await student.post(f"{COURSE}/{world['course_id']}/materials/{material_id}/view")
+
+
+async def add_material(world, title="Лекция"):
+    response = await world["teacher"].post(
+        f"{COURSE}/{world['course_id']}/materials",
+        data={"title": title, "description": "Текст", "section_id": world["section_id"]},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+async def test_material_views_count_as_activity(world):
+    first = await add_material(world, "Первая")
+    await add_material(world, "Вторая")
+    alice = world["alice"]
+
+    assert (await view(alice, world, first)).status_code == 204
+    assert (await view(alice, world, first)).status_code == 204  # повторный просмотр не дублирует
+
+    data = (await world["teacher"].get(f"{COURSE}/{world['course_id']}/analytics")).json()
+    rows = {row["student"]["email"]: row for row in data["students"]}
+    assert (rows["alice@test.dev"]["materials_viewed"], rows["alice@test.dev"]["materials_total"]) == (1, 2)
+    # Читающий студент уже не «новый», даже если тестов ещё не было.
+    assert rows["alice@test.dev"]["status"] == "active" and rows["alice@test.dev"]["last_activity_at"]
+    assert rows["bob@test.dev"]["status"] == "new" and rows["bob@test.dev"]["materials_viewed"] == 0
+
+
+async def test_material_view_rules(world):
+    material = await add_material(world)
+    teacher = world["teacher"]
+    # Преподаватель материал не «просматривает»: запрос принимается и ничего не записывает.
+    assert (await view(teacher, world, material)).status_code == 204
+    data = (await teacher.get(f"{COURSE}/{world['course_id']}/analytics")).json()
+    assert all(row["materials_viewed"] == 0 for row in data["students"])
+    # Материала нет в курсе.
+    assert (await view(world["alice"], world, 99999)).status_code == 404
+
+
+async def test_old_activity_with_fresh_reading_is_not_stalled(world):
+    failed = await scenario(world)
+    await shift(failed["id"], finished_at=int(time.time()) - 10 * 86400)
+    material = await add_material(world)
+    await view(world["bob"], world, material)
+
+    data = (await world["teacher"].get(f"{COURSE}/{world['course_id']}/analytics")).json()
+    statuses = {row["student"]["email"]: row["status"] for row in data["students"]}
+    # Bob неделями не проходил тесты, но сегодня читал материал: он занимается.
+    assert statuses["bob@test.dev"] == "active"
+
+
+async def test_csv_exports(world):
+    await scenario(world)
+    teacher = world["teacher"]
+
+    response = await teacher.get(f"{COURSE}/{world['course_id']}/analytics/export")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    text = response.content.decode("utf-8")
+    assert text.startswith("﻿")
+    lines = text.lstrip("﻿").strip().split("\r\n")
+    assert lines[0].split(";")[0] == "Студент" and len(lines) == 3
+    assert any("alice@test.dev" in line and "Прошёл курс" in line for line in lines)
+
+    tests = await teacher.get(f"{COURSE}/{world['course_id']}/tests/{world['test_id']}/export")
+    assert tests.status_code == 200
+    rows = tests.content.decode("utf-8").lstrip("﻿").strip().split("\r\n")
+    assert len(rows) == 3 and any("Сдан" in row for row in rows)
+
+
+async def test_csv_exports_are_teacher_only_and_safe(world):
+    base = f"{COURSE}/{world['course_id']}"
+    assert (await world["alice"].get(f"{base}/analytics/export")).status_code == 403
+    assert (await world["alice"].get(f"{base}/tests/{world['test_id']}/export")).status_code == 403
+    assert (await world["teacher"].get(f"{base}/tests/9999/export")).status_code == 404
+
+
+def test_csv_cells_cannot_start_a_formula():
+    from api_v1.analytics.export import safe
+
+    assert safe("=HYPERLINK(\"x\")") == "'=HYPERLINK(\"x\")"
+    assert safe("+1") == "'+1" and safe("-1") == "'-1" and safe("@a") == "'@a"
+    assert safe("Иван") == "Иван" and safe(None) == "" and safe(5) == "5"

@@ -1,6 +1,8 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 from sqlalchemy import select
@@ -14,7 +16,14 @@ from api_v1.course_material.dependencies import (
 )
 from api_v1.course_material.schemas import MaterialGet
 from api_v1.course_section.state import unlocked_section_ids
-from core.models import Course, CourseMaterial, CourseSection, MaterialFile, db_helper
+from core.models import (
+    Course,
+    CourseMaterial,
+    CourseSection,
+    MaterialFile,
+    MaterialView,
+    db_helper,
+)
 
 http_bearer = HTTPBearer()
 router = APIRouter(tags=["CourseMaterial"], dependencies=[Depends(http_bearer)])
@@ -36,6 +45,46 @@ async def get_materials(
         unlocked = await unlocked_section_ids(session, course.id, user_id)
         materials = [item for item in materials if item.section_id in unlocked]
     return materials
+
+
+@router.post("/{course_id}/materials/{material_id}/view", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_material_viewed(
+    material_id: int,
+    course: Course = Depends(get_course_for_member),
+    user_id: int = Depends(get_user_id_in_access_token),
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    """Отмечает, что студент открыл материал. Преподавателя это не касается."""
+    if course.teacher_id == user_id:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    material = await session.get(CourseMaterial, material_id)
+    if material is None or material.course_id != course.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Материал не найден")
+    # Закрытый раздел студент увидеть не может, значит и отметка по нему невозможна.
+    if material.section_id not in await unlocked_section_ids(session, course.id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Раздел ещё закрыт")
+
+    view = await session.scalar(
+        select(MaterialView).where(
+            MaterialView.student_id == user_id, MaterialView.material_id == material_id
+        )
+    )
+    now = datetime.now()
+    if view is None:
+        session.add(
+            MaterialView(
+                course_id=course.id,
+                student_id=user_id,
+                material_id=material_id,
+                first_viewed_at=now,
+                last_viewed_at=now,
+            )
+        )
+    else:
+        view.last_viewed_at = now
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

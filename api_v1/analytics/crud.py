@@ -23,7 +23,9 @@ from core.models import (
     Course,
     CourseSection,
     CourseStudentAssociation,
+    CourseMaterial,
     CourseTestAssociation,
+    MaterialView,
     Profile,
     Test,
     TestExtraAttempt,
@@ -116,6 +118,28 @@ async def course_analytics(session: AsyncSession, course: Course) -> CourseAnaly
                 last_activity.get(row.participant_id, 0), row.finished_at
             )
 
+    # Просмотры материалов: сколько открыл каждый студент и когда в последний раз.
+    materials_total = (
+        await session.scalar(
+            select(func.count(CourseMaterial.id)).where(CourseMaterial.course_id == course.id)
+        )
+    ) or 0
+    viewed: Dict[int, int] = defaultdict(int)
+    for student_id, count, last in (
+        await session.execute(
+            select(
+                MaterialView.student_id,
+                func.count(MaterialView.id),
+                func.max(MaterialView.last_viewed_at),
+            )
+            .where(MaterialView.course_id == course.id)
+            .group_by(MaterialView.student_id)
+        )
+    ).all():
+        viewed[student_id] = count
+        stamp = int(last.timestamp())
+        last_activity[student_id] = max(last_activity.get(student_id, 0), stamp)
+
     now = int(time.time())
     section_reached: Dict[int, int] = defaultdict(int)
     section_passed: Dict[int, int] = defaultdict(int)
@@ -159,6 +183,8 @@ async def course_analytics(session: AsyncSession, course: Course) -> CourseAnaly
                 sections_passed=progress.passed_count,
                 sections_total=total_sections,
                 avg_best_percent=round(sum(percents) / len(percents)) if percents else None,
+                materials_viewed=viewed[student.id],
+                materials_total=materials_total,
                 last_activity_at=last,
                 status=state_name,
             )

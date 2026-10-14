@@ -16,6 +16,7 @@ __all__ = (
     "TestProgress",
     "TestExtraAttempt",
     "CourseRequest",
+    "MaterialView",
     "Notification",
     "NotificationPref",
     "DatabaseHelper",
@@ -40,3 +41,4 @@ from .test_progress import TestProgress
 from .test_extra_attempt import TestExtraAttempt
 from .course_request import CourseRequest
 from .notification import Notification, NotificationPref
+from .material_view import MaterialView

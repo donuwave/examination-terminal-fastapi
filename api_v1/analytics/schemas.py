@@ -36,6 +36,10 @@ class StudentStat(BaseModel):
     sections_passed: int
     sections_total: int
     avg_best_percent: Optional[int] = None
+    # Сколько материалов курса студент открыл.
+    materials_viewed: int = 0
+    materials_total: int = 0
+    # Последняя попытка или просмотр материала, unix-секунды.
     last_activity_at: Optional[int] = None
     status: StudentStatus
 
