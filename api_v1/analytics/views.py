@@ -1,12 +1,8 @@
-from typing import List
-
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api_v1.analytics import crud, feed
-from api_v1.auth.decorators import role_required
-from api_v1.auth.dependencies import get_user_id_in_access_token
+from api_v1.analytics import crud
 from api_v1.analytics.export import csv_response, when
 from api_v1.analytics.schemas import CourseAnalytics, TestAnalytics
 from api_v1.course_material.dependencies import get_course_for_teacher
@@ -120,20 +116,3 @@ async def export_test_results(
         ["Студент", "Почта", "Статус", "Попыток", "Попыток всего", "Лучший результат, %", "Последняя попытка"],
         rows,
     )
-
-
-# Лента живёт отдельно от маршрутов курса: адрес вида /course/activity разбирался бы как курс с номером.
-feed_router = APIRouter(tags=["Analytics"], dependencies=[Depends(http_bearer)])
-
-
-@feed_router.get("/students", response_model=List[feed.ActivityEvent])
-@role_required("Преподаватель")
-async def students_activity(
-    request: Request,
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    user_id: int = Depends(get_user_id_in_access_token),
-    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
-):
-    """Что студенты делали на курсах преподавателя: попытки, чтение, заявки и приглашения."""
-    return await feed.students_feed(session=session, teacher_id=user_id, limit=limit, offset=offset)
