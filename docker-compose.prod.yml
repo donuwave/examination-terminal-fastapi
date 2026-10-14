@@ -1,23 +1,40 @@
-version: '3.8'
-
+# Продакшен: база и API.
+#
+#   cp .env.prod.example .env.prod   # заполнить пароль
+#   ./scripts/generate-keys.sh       # ключи JWT
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 services:
   db:
-    image: postgres:latest
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: qwerty
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-examination}
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-examination}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   web:
     build: .
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:qwerty@db:5433/
+    restart: unless-stopped
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    environment:
+      ENV: prod
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-examination}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    volumes:
+      - ./certs:/app/certs:ro
+      - uploads:/app/uploads
     ports:
-      - "8000:8000"
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+      - "${API_PORT:-8000}:8000"
 
 volumes:
   db_data:
+  uploads:

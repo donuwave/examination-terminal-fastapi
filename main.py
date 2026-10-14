@@ -16,7 +16,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
-if os.getenv("ENV") == "dev":
+# Адреса фронтенда задаются через CORS_ORIGINS (через запятую). Без неё: в dev прежний адрес, в остальных режимах любые.
+configured = [item.strip() for item in os.getenv("CORS_ORIGINS", "").split(",") if item.strip()]
+if configured:
+    origins = configured
+elif os.getenv("ENV") == "dev":
     origins = ["http://45.10.43.121:3000"]
 else:
     origins = ["*"]

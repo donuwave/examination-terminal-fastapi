@@ -1,8 +1,7 @@
-version: '3.8'
-
+# База для разработки: порт 5437, пароль qwerty. Приложение запускается локально (см. README).
 services:
   db:
-    image: postgres:latest
+    image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: "qwerty"
     ports:
@@ -10,7 +9,6 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
-
 
 volumes:
   db_data:
