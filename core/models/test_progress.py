@@ -73,6 +73,13 @@ class TestProgressResult(Base):
     options: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
     correct_answer: Mapped[str] = mapped_column(String, nullable=False)
     student_answer: Mapped[str] = mapped_column(String, nullable=True)
+    # Копия вопроса на момент старта попытки: тип и все верные ответы.
+    kind: Mapped[str] = mapped_column(String, nullable=False, default="single", server_default="single")
+    correct_answers: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=False, default=list, server_default="{}"
+    )
+    # Выбранные варианты для вопросов с несколькими ответами.
+    student_answers: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
 
     test_progress: Mapped["TestProgress"] = relationship(
         "TestProgress", back_populates="result_test"

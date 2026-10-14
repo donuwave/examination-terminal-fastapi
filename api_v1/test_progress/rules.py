@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from api_v1.test_progress.schemas import TestState
 from api_v1.notification import service as notifications
+from api_v1.test_progress.grading import is_answer_correct
 from core.models import Course, Profile, Test, TestExtraAttempt, TestProgress
 
 STARTED, FINISHED = 2, 3
@@ -23,12 +24,18 @@ def seconds_left(progress: TestProgress) -> int | None:
     return max(0, end - int(time.time()))
 
 
-def correct_count(progress: TestProgress) -> int:
-    return sum(
-        1
-        for item in progress.result_test
-        if item.student_answer is not None and item.student_answer == item.correct_answer
+def is_item_correct(item) -> bool:
+    return is_answer_correct(
+        item.kind,
+        item.correct_answer,
+        item.correct_answers,
+        item.student_answer,
+        item.student_answers,
     )
+
+
+def correct_count(progress: TestProgress) -> int:
+    return sum(1 for item in progress.result_test if is_item_correct(item))
 
 
 def percent_of(progress: TestProgress) -> int:

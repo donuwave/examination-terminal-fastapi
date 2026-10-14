@@ -16,7 +16,8 @@ from api_v1.analytics.schemas import (
     TestStat,
 )
 from api_v1.course_section.state import course_progress
-from api_v1.test_progress.rules import FINISHED, close_expired
+from api_v1.test_progress.grading import given_answer
+from api_v1.test_progress.rules import FINISHED, close_expired, is_item_correct
 from api_v1.test_progress.schemas import StudentBrief
 from core.models import (
     Course,
@@ -255,11 +256,7 @@ async def test_analytics(session: AsyncSession, course: Course, test_id: int) ->
     # Вопросы сравниваем по тексту: в попытке хранится копия вопроса на момент старта.
     answers = (
         await session.execute(
-            select(
-                TestProgressResult.text_question,
-                TestProgressResult.correct_answer,
-                TestProgressResult.student_answer,
-            )
+            select(TestProgressResult)
             .join(TestProgress, TestProgress.id == TestProgressResult.test_progress_id)
             .where(
                 TestProgress.course_id == course.id,
@@ -268,14 +265,22 @@ async def test_analytics(session: AsyncSession, course: Course, test_id: int) ->
             )
         )
     ).all()
-    by_text: Dict[str, List[Tuple[str, str | None]]] = defaultdict(list)
-    for text, correct, given in answers:
-        by_text[text].append((correct, given))
+    by_text: Dict[str, List[TestProgressResult]] = defaultdict(list)
+    for (item,) in answers:
+        by_text[item.text_question].append(item)
 
     questions: List[QuestionStat] = []
     for text, items in by_text.items():
-        correct_count = sum(1 for correct, given in items if given is not None and given == correct)
-        wrong = Counter(given for correct, given in items if given is not None and given != correct)
+        correct_count = sum(1 for item in items if is_item_correct(item))
+        wrong = Counter(
+            given
+            for given in (
+                given_answer(item.kind, item.student_answer, item.student_answers)
+                for item in items
+                if not is_item_correct(item)
+            )
+            if given
+        )
         top = wrong.most_common(1)
         questions.append(
             QuestionStat(

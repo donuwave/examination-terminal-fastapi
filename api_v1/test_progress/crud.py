@@ -11,6 +11,7 @@ from sqlalchemy.orm import joinedload, noload, selectinload
 from api_v1.course_section.state import course_progress
 from api_v1.notification import service as notifications
 from api_v1.test_progress.rules import (
+    is_item_correct,
     FINISHED,
     STARTED,
     close_expired,
@@ -43,6 +44,9 @@ from core.models import (
 from core.models.test_progress import TestProgressResult
 
 
+MAX_TEXT_ANSWER_LENGTH = 500
+
+
 def to_view(
     progress: TestProgress, state: TestState | None = None, reveal: bool = False
 ) -> TestProgressTest:
@@ -51,11 +55,12 @@ def to_view(
     view.remaining_time = seconds_left(progress)
     view.state = state
     finished = progress.status == FINISHED
-    for item in view.result_test:
+    for source, item in zip(progress.result_test, view.result_test):
         if finished:
-            item.is_correct = item.student_answer is not None and item.student_answer == item.correct_answer
+            item.is_correct = is_item_correct(source)
         if not (reveal and finished):
             item.correct_answer = None
+            item.correct_answers = None
     return view
 
 
@@ -152,12 +157,29 @@ def _apply_answers(progress: TestProgress, answers: List[AnswerIn]) -> None:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Вопрос не относится к этой попытке",
             )
-        if answer.student_answer is not None and answer.student_answer not in item.options:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Такого варианта ответа нет",
-            )
-        item.student_answer = answer.student_answer
+        if item.kind == "multiple":
+            chosen = answer.student_answers or []
+            if any(option not in item.options for option in chosen) or len(set(chosen)) != len(chosen):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Такого варианта ответа нет",
+                )
+            item.student_answers = chosen or None
+        elif item.kind == "text":
+            text = (answer.student_answer or "").strip()
+            if len(text) > MAX_TEXT_ANSWER_LENGTH:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Ответ не длиннее {MAX_TEXT_ANSWER_LENGTH} символов",
+                )
+            item.student_answer = text or None
+        else:
+            if answer.student_answer is not None and answer.student_answer not in item.options:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Такого варианта ответа нет",
+                )
+            item.student_answer = answer.student_answer
 
 
 def _own(progress: TestProgress, user_id: int) -> None:
@@ -228,8 +250,10 @@ async def start_attempt(
         results.append(
             TestProgressResult(
                 text_question=question.text_question,
+                kind=question.kind,
                 options=options,
                 correct_answer=question.correct_answer,
+                correct_answers=list(question.correct_answers) or [question.correct_answer],
                 student_answer=None,
             )
         )

@@ -27,10 +27,13 @@ class TestProgressResultTest(BaseModel):
 
     id: int
     text_question: str
+    kind: str = "single"
     options: List[str]
     # Правильные ответы открываются, когда тест сдан или попытки закончились.
     correct_answer: Optional[str] = None
+    correct_answers: Optional[List[str]] = None
     student_answer: Optional[str] = None
+    student_answers: Optional[List[str]] = None
     # Верен ли ответ: заполняется после завершения, даже если сам правильный ответ скрыт.
     is_correct: Optional[bool] = None
 
@@ -65,6 +68,8 @@ class AnswerIn(BaseModel):
 
     id: int
     student_answer: Optional[str] = None
+    # Для вопросов с несколькими ответами.
+    student_answers: Optional[List[str]] = None
 
 
 class StartIn(BaseModel):
