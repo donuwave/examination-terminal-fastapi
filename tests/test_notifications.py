@@ -1,6 +1,6 @@
 import time
 
-from api_v1.notification.jobs import notify_pause_over
+from api_v1.notification.jobs import cleanup_notifications, notify_pause_over
 from tests.conftest import Api
 from tests.test_attempts import PROGRESS, finish, shift, start
 from tests.test_db import TestSessionLocal
@@ -128,7 +128,7 @@ async def test_read_all_and_paging(world):
 async def test_disabled_kind_is_not_delivered(world):
     teacher, carol = world["teacher"], await newcomer(world)
     settings = (await carol.get(f"{NOTES}/settings")).json()
-    assert settings["invitation"] is True and len(settings) == 8
+    assert settings["invitation"] is True and len(settings) == 9
 
     changed = await carol.put(f"{NOTES}/settings", json={"kind": "invitation", "enabled": False})
     assert changed.json()["invitation"] is False
@@ -172,3 +172,48 @@ async def test_pause_over_skipped_when_retaken_or_passed(world):
 
     assert await run_job() == 0
     assert "pause_over" not in await kinds(alice) + await kinds(bob)
+
+
+async def test_teacher_is_told_when_student_finishes_course(world):
+    alice, teacher = world["alice"], world["teacher"]
+    await finish(alice, await start(alice, world))
+    item = next(n for n in await notes(teacher) if n["kind"] == "course_finished")
+    assert "Алгоритмы" in item["text"] and item["link"].endswith("/analytics")
+    # Один раз на студента, а не на каждый сданный тест.
+    assert sum(1 for n in await notes(teacher) if n["kind"] == "course_finished") == 1
+
+
+async def test_failing_does_not_finish_course(world):
+    alice, teacher = world["alice"], world["teacher"]
+    await finish(alice, await start(alice, world), answer="нет")
+    assert "course_finished" not in await kinds(teacher)
+
+
+async def test_old_notifications_are_cleaned_up(world):
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import update
+
+    from core.models import Notification
+
+    alice = world["alice"]
+    teacher = world["teacher"]
+    carol = await newcomer(world)
+    course_id = await request_course(teacher)
+    await teacher.post(f"{COURSE}/{course_id}/invite", json={"email": "carol@test.dev"})
+    await carol.post(f"{NOTES}/read-all")
+    await alice.post(f"{NOTES}/read-all")
+
+    old = datetime.now() - timedelta(days=120)
+    async with TestSessionLocal() as session:
+        await session.execute(
+            update(Notification).where(Notification.user_id == alice.id).values(read_at=old, created_at=old)
+        )
+        await session.commit()
+    async with TestSessionLocal() as session:
+        removed = await cleanup_notifications(session)
+
+    assert removed >= 1
+    assert await notes(alice) == []
+    # Свежие прочитанные уведомления остаются.
+    assert len(await notes(carol)) == 1

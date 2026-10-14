@@ -3,12 +3,21 @@
 import logging
 import time
 
-from sqlalchemy import exists, select
+from datetime import datetime, timedelta
+
+from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from api_v1.notification import service as notifications
-from core.models import Course, CourseStudentAssociation, Test, TestProgress, db_helper
+from core.models import (
+    Course,
+    CourseStudentAssociation,
+    Notification,
+    Test,
+    TestProgress,
+    db_helper,
+)
 
 log = logging.getLogger(__name__)
 
@@ -82,3 +91,28 @@ async def run_pause_over() -> None:
             await notify_pause_over(session)
     except Exception:  # задача не должна падать и останавливать планировщик
         log.exception("Не удалось разослать уведомления об окончании паузы")
+
+
+READ_KEEP_DAYS = 90
+UNREAD_KEEP_DAYS = 365
+
+
+async def cleanup_notifications(session: AsyncSession) -> int:
+    """Удаляет старые уведомления: прочитанные через 90 дней, непрочитанные через год."""
+    now = datetime.now()
+    result = await session.execute(
+        delete(Notification).where(
+            (Notification.read_at.is_not(None) & (Notification.read_at < now - timedelta(days=READ_KEEP_DAYS)))
+            | (Notification.created_at < now - timedelta(days=UNREAD_KEEP_DAYS))
+        )
+    )
+    await session.commit()
+    return result.rowcount or 0
+
+
+async def run_cleanup() -> None:
+    try:
+        async with db_helper.session_factory() as session:
+            await cleanup_notifications(session)
+    except Exception:
+        log.exception("Не удалось почистить старые уведомления")

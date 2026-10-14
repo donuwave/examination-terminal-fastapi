@@ -47,6 +47,7 @@ async def finalize(
     progress.count_current_answer = correct
     progress.passed = bool(total) and correct * 100 >= progress.test.pass_percent * total
     await _tell_teacher_if_out(session, progress)
+    await _tell_teacher_if_finished(session, progress)
     await session.commit()
 
 
@@ -74,6 +75,30 @@ async def _tell_teacher_if_out(session: AsyncSession, progress: TestProgress) ->
         f"У студента {notifications.person_name(student)} закончились попытки теста "
         f"«{progress.test.name}» в курсе «{course.name}»",
         f"/courses/{course.id}/tests/{progress.test_id}/results",
+    )
+
+
+async def _tell_teacher_if_finished(session: AsyncSession, progress: TestProgress) -> None:
+    """Сдан последний тест курса: преподавателю сообщаем, что студент прошёл курс целиком."""
+    if not progress.passed:
+        return
+    # Импорт здесь: модуль прогресса по курсу сам использует правила попыток.
+    from api_v1.course_section.state import course_progress
+
+    await session.flush()
+    state = await course_progress(session, progress.course_id, progress.participant_id)
+    if not state.sections or state.passed_count != len(state.sections):
+        return
+
+    course = await session.get(Course, progress.course_id)
+    student = await session.get(Profile, progress.participant_id)
+    await notifications.notify(
+        session,
+        course.teacher_id,
+        notifications.COURSE_FINISHED,
+        "Студент прошёл курс",
+        f"{notifications.person_name(student)} прошёл все разделы курса «{course.name}»",
+        f"/courses/{course.id}/analytics",
     )
 
 
