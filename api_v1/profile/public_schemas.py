@@ -32,6 +32,8 @@ class ProfileCourse(BaseModel):
     enrollment: str
     students_count: int
     tests_count: int
+    # Может ли смотрящий открыть курс: он его преподаватель или студент курса.
+    is_member: bool
     # Прогресс есть только там, где его вправе видеть смотрящий.
     sections_passed: Optional[int] = None
     sections_total: Optional[int] = None

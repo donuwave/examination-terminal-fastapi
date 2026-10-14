@@ -90,6 +90,8 @@ async def test_teacher_courses_are_public(world):
     assert set(names) == {"Алгоритмы", "По заявке"} and data["total"] == 2
     assert names["По заявке"]["enrollment"] == "request"
     assert names["Алгоритмы"]["sections_total"] is None
+    # Alice состоит в «Алгоритмах», но не в курсе «По заявке».
+    assert names["Алгоритмы"]["is_member"] is True and names["По заявке"]["is_member"] is False
 
 
 async def test_profile_courses_paging(world):

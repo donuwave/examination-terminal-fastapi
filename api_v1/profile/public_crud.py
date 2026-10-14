@@ -169,6 +169,14 @@ async def get_profile_courses(
         await session.scalars(query.order_by(Course.name).limit(limit).offset(offset))
     ).all()
 
+    viewer_courses = set(
+        await session.scalars(
+            select(CourseStudentAssociation.course_id).where(
+                CourseStudentAssociation.profile_id == viewer.id
+            )
+        )
+    )
+
     items = []
     for course in courses:
         students_count, tests_count = await _counts(session, course.id)
@@ -179,6 +187,7 @@ async def get_profile_courses(
             enrollment=course.enrollment,
             students_count=students_count,
             tests_count=tests_count,
+            is_member=course.teacher_id == viewer.id or course.id in viewer_courses,
         )
         if with_progress:
             progress = await course_progress(session, course.id, target.id)
