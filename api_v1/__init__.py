@@ -5,6 +5,7 @@ from .auth.views import router as auth_router
 from .role.views import router as role_router
 from .profile.views import router as profile_router
 from .course.views import router as course_router
+from .certificate.views import router as certificate_router
 from .course_material.views import router as course_material_router
 from .course_section.views import router as course_section_router
 from .course_request.views import invitations_router, router as course_request_router
@@ -21,6 +22,7 @@ router.include_router(course_material_router, prefix="/course")
 router.include_router(course_section_router, prefix="/course")
 router.include_router(course_request_router, prefix="/course")
 router.include_router(analytics_router, prefix="/course")
+router.include_router(certificate_router, prefix="/course")
 router.include_router(invitations_router, prefix="/invitations")
 router.include_router(test_router, prefix="/tests")
 router.include_router(test_progress_router, prefix="/test-progress")
