@@ -195,3 +195,58 @@ def test_csv_cells_cannot_start_a_formula():
     assert safe("=HYPERLINK(\"x\")") == "'=HYPERLINK(\"x\")"
     assert safe("+1") == "'+1" and safe("-1") == "'-1" and safe("@a") == "'@a"
     assert safe("Иван") == "Иван" and safe(None) == "" and safe(5) == "5"
+
+
+FEED = "/api/v1/activity/students"
+
+
+async def test_teacher_activity_feed_has_all_kinds(world):
+    from tests.conftest import Api
+
+    teacher, alice = world["teacher"], world["alice"]
+    material = await add_material(world, "Лекция 1")
+    await view(alice, world, material)
+    await finish(alice, await start(alice, world))
+
+    # Заявка на курс по заявке.
+    course = (
+        await teacher.post(
+            f"{COURSE}/", data={"name": "По заявке", "description": "О", "enrollment": "request"}
+        )
+    ).json()["id"]
+    carol = await Api(world["transport"]).register("carol@test.dev", world["roles"]["Студент"])
+    await carol.post(f"{COURSE}/{course}/apply")
+
+    events = (await teacher.get(FEED)).json()
+    kinds = [event["kind"] for event in events]
+    assert {"attempt", "material", "application", "invitation_accepted"} <= set(kinds)
+    # От новых к старым.
+    assert [event["at"] for event in events] == sorted((event["at"] for event in events), reverse=True)
+
+    attempt = next(event for event in events if event["kind"] == "attempt")
+    assert attempt["title"] == "Сортировки" and attempt["passed"] is True and attempt["percent"] == 100
+    assert attempt["test_id"] == world["test_id"] and attempt["student"]["email"] == "alice@test.dev"
+    application = next(event for event in events if event["kind"] == "application")
+    assert application["course"]["name"] == "По заявке"
+
+
+async def test_activity_feed_paging_and_access(world):
+    teacher, alice = world["teacher"], world["alice"]
+    for number in range(3):
+        await view(alice, world, await add_material(world, f"М{number}"))
+
+    first = (await teacher.get(FEED, params={"limit": 2})).json()
+    second = (await teacher.get(FEED, params={"limit": 2, "offset": 2})).json()
+    assert len(first) == 2 and second
+    assert not {event["id"] for event in first} & {event["id"] for event in second}
+
+    assert (await alice.get(FEED)).status_code == 403
+    assert (await teacher.get(FEED, params={"limit": 0})).status_code == 422
+
+
+async def test_feed_shows_only_own_courses(world):
+    from tests.conftest import Api
+
+    await finish(world["alice"], await start(world["alice"], world))
+    other = await Api(world["transport"]).register("t2@test.dev", world["roles"]["Преподаватель"])
+    assert (await other.get(FEED)).json() == []

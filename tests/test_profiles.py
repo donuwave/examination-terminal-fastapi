@@ -105,3 +105,17 @@ async def test_profile_courses_paging(world):
     ).json()
     assert len(rest["courses"]) == 2
     assert (await world["alice"].get(f"{PROFILE}/{t.id}/courses", params={"limit": 0})).status_code == 422
+
+
+async def test_teacher_sees_student_activity_in_course_row(world):
+    alice, teacher = world["alice"], world["teacher"]
+    await finish_attempt(alice, world)
+    rows = (await teacher.get(f"{PROFILE}/{alice.id}/courses")).json()["courses"]
+    assert rows[0]["last_activity_at"]
+    # Однокурсник активность не видит так же, как и прогресс.
+    seen = (await world["bob"].get(f"{PROFILE}/{alice.id}/courses")).json()["courses"]
+    assert seen[0]["last_activity_at"] is None
+
+
+async def finish_attempt(student, world):
+    await finish(student, await start(student, world))

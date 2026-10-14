@@ -26,6 +26,7 @@ from core.models import (
     Course,
     CourseStudentAssociation,
     CourseTestAssociation,
+    MaterialView,
     Profile,
     TestProgress,
 )
@@ -125,6 +126,26 @@ async def _best_percent(session: AsyncSession, course_id: int, student_id: int) 
     return round(sum(best.values()) / len(best)) if best else None
 
 
+async def _last_activity(session: AsyncSession, course_id: int, student_id: int) -> int | None:
+    """Последняя попытка или просмотр материала студента в курсе."""
+    attempt = await session.scalar(
+        select(func.max(TestProgress.finished_at)).where(
+            TestProgress.course_id == course_id,
+            TestProgress.participant_id == student_id,
+            TestProgress.status == 3,
+        )
+    )
+    view = await session.scalar(
+        select(func.max(MaterialView.last_viewed_at)).where(
+            MaterialView.course_id == course_id, MaterialView.student_id == student_id
+        )
+    )
+    stamps = [attempt] if attempt else []
+    if view:
+        stamps.append(int(view.timestamp()))
+    return max(stamps) if stamps else None
+
+
 async def _counts(session: AsyncSession, course_id: int) -> tuple[int, int]:
     students = await session.scalar(
         select(func.count(CourseStudentAssociation.id)).where(
@@ -194,5 +215,6 @@ async def get_profile_courses(
             item.sections_passed = progress.passed_count
             item.sections_total = len(progress.sections)
             item.avg_best_percent = await _best_percent(session, course.id, target.id)
+            item.last_activity_at = await _last_activity(session, course.id, target.id)
         items.append(item)
     return ProfileCourses(courses=items, total=total)

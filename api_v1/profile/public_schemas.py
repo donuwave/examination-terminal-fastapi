@@ -38,6 +38,8 @@ class ProfileCourse(BaseModel):
     sections_passed: Optional[int] = None
     sections_total: Optional[int] = None
     avg_best_percent: Optional[int] = None
+    # Последняя попытка или просмотр материала, unix-секунды. Видно тем же, кому виден прогресс.
+    last_activity_at: Optional[int] = None
 
 
 class ProfileCourses(BaseModel):

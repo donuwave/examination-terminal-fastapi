@@ -4,6 +4,8 @@ from pydantic import BaseModel
 
 from api_v1.test_progress.schemas import StudentBrief
 
+_StudentRef = StudentBrief
+
 # finished — прошёл все разделы, active — занимается, stalled — давно не было попыток,
 # new — ещё не начинал.
 StudentStatus = Literal["finished", "active", "stalled", "new"]
