@@ -37,7 +37,7 @@ async def get_test_analytics(
 STATUS_NAMES = {
     "finished": "Прошёл курс",
     "active": "Занимается",
-    "stalled": "Давно без попыток",
+    "stalled": "Давно без активности",
     "new": "Не начал",
 }
 TEST_STATUS_NAMES = {
