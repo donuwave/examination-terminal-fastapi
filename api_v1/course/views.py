@@ -1,6 +1,6 @@
 from typing import Literal, List, Optional
 
-from fastapi import APIRouter, Depends, Form, Request, Query
+from fastapi import APIRouter, Depends, Form, Request, Response, Query
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,14 +63,25 @@ async def get_categories(
 
 @router.get("/catalog", response_model=list[CatalogCourse])
 async def get_catalog(
+    response: Response,
     search: Optional[str] = Query(None, min_length=1, description="Поисковая строка"),
     category_id: Optional[int] = Query(None, description="Фильтр по типу курса"),
+    limit: int = Query(24, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     user_id: int = Depends(get_user_id_in_access_token),
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
-    return await course_crud.get_catalog(
-        session=session, user_id=user_id, search=search, category_id=category_id
+    """Страница каталога. Общее число подходящих курсов в заголовке `X-Total-Count`."""
+    items, total = await course_crud.get_catalog(
+        session=session,
+        user_id=user_id,
+        search=search,
+        category_id=category_id,
+        limit=limit,
+        offset=offset,
     )
+    response.headers["X-Total-Count"] = str(total)
+    return items
 
 
 @router.post("/")

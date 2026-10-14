@@ -1,7 +1,7 @@
 from typing import Union, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, Result, or_, asc, desc
+from sqlalchemy import Result, asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -165,14 +165,11 @@ async def get_catalog(
     user_id: int,
     search: Optional[str],
     category_id: Optional[int],
-) -> list[CatalogCourse]:
-    """Все курсы платформы, независимо от того, участвует ли в них пользователь."""
-    state = (
-        select(Course)
-        .options(selectinload(Course.tests))
-        .options(selectinload(Course.students))
-        .order_by(Course.name)
-    )
+    limit: int = 24,
+    offset: int = 0,
+) -> tuple[list[CatalogCourse], int]:
+    """Страница курсов платформы и общее число подходящих, независимо от участия пользователя."""
+    state = select(Course)
 
     if category_id is not None:
         state = state.where(Course.category_id == category_id)
@@ -185,9 +182,17 @@ async def get_catalog(
             )
         )
 
-    courses = (await session.scalars(state)).all()
+    total = await session.scalar(select(func.count()).select_from(state.subquery())) or 0
+    page = (
+        state.options(selectinload(Course.tests))
+        .options(selectinload(Course.students))
+        .order_by(Course.name, Course.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    courses = (await session.scalars(page)).all()
     requests = await pending_by_course(session, user_id)
-    return [
+    items = [
         CatalogCourse(
             id=course.id,
             name=course.name,
@@ -203,6 +208,7 @@ async def get_catalog(
         )
         for course in courses
     ]
+    return items, total
 
 
 async def enroll_student(session: AsyncSession, course_id: int, user_id: int):

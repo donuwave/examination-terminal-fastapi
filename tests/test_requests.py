@@ -178,3 +178,21 @@ async def test_students_cannot_be_added_directly(world):
         f"{COURSE}/{world['course_id']}/add_student", json=[world["alice"].id]
     )
     assert response.status_code in (404, 405)
+
+
+async def test_catalog_is_paged_and_reports_total(world):
+    teacher, alice = world["teacher"], world["alice"]
+    for number in range(5):
+        await teacher.post(f"{COURSE}/", data={"name": f"Курс {number}", "description": "Описание"})
+
+    first = await alice.get(f"{COURSE}/catalog", params={"limit": 2})
+    assert first.headers["x-total-count"] == "6" and len(first.json()) == 2
+    second = await alice.get(f"{COURSE}/catalog", params={"limit": 2, "offset": 2})
+    assert len(second.json()) == 2
+    names = [item["name"] for item in first.json() + second.json()]
+    assert names == sorted(names) and len(set(names)) == 4
+
+    # Счётчик считает уже отфильтрованное: по «Курс 3» подходит один курс из шести.
+    found = await alice.get(f"{COURSE}/catalog", params={"search": "Курс 3", "limit": 1})
+    assert found.headers["x-total-count"] == "1" and len(found.json()) == 1
+    assert (await alice.get(f"{COURSE}/catalog", params={"limit": 0})).status_code == 422
