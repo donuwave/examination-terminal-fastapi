@@ -119,3 +119,69 @@ async def test_teacher_sees_student_activity_in_course_row(world):
 
 async def finish_attempt(student, world):
     await finish(student, await start(student, world))
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+async def test_registration_date_is_shown(world):
+    me = (await world["alice"].get(f"{PROFILE}/me")).json()
+    assert me["created_at"]
+    card = (await world["teacher"].get(f"{PROFILE}/{world['alice'].id}")).json()
+    assert isinstance(card["created_at"], int) and card["created_at"] > 0
+
+
+async def test_age_and_gender_hidden_until_owner_allows(world, monkeypatch):
+    alice, bob, teacher = world["alice"], world["bob"], world["teacher"]
+    await alice.patch(f"{PROFILE}/", json={"age": 21, "gender": 1})
+
+    # Однокурсник по умолчанию ничего не видит, преподаватель студента видит всегда.
+    assert (await bob.get(f"{PROFILE}/{alice.id}")).json()["age"] is None
+    assert (await teacher.get(f"{PROFILE}/{alice.id}")).json()["age"] == 21
+
+    await alice.patch(f"{PROFILE}/", json={"show_details": True})
+    opened = (await bob.get(f"{PROFILE}/{alice.id}")).json()
+    assert (opened["age"], opened["gender"]) == (21, 1)
+
+    await alice.patch(f"{PROFILE}/", json={"show_details": False})
+    assert (await bob.get(f"{PROFILE}/{alice.id}")).json()["age"] is None
+
+
+async def test_avatar_upload_visibility_and_removal(world, tmp_path, monkeypatch):
+    from api_v1.profile import avatar
+
+    monkeypatch.setattr(avatar, "UPLOAD_DIR", tmp_path)
+    alice, bob = world["alice"], world["bob"]
+    carol = await stranger(world)
+
+    uploaded = await alice.post(f"{PROFILE}/avatar", files={"file": ("a.png", PNG, "image/png")})
+    assert uploaded.status_code == 200 and uploaded.json()["has_avatar"] is True
+    assert len(list(tmp_path.iterdir())) == 1
+
+    image = await bob.get(f"{PROFILE}/{alice.id}/avatar")
+    assert image.status_code == 200 and image.content == PNG
+    assert (await bob.get(f"{PROFILE}/{alice.id}")).json()["has_avatar"] is True
+    # Постороннему профиль, а значит и картинка, недоступны.
+    assert (await carol.get(f"{PROFILE}/{alice.id}/avatar")).status_code == 404
+
+    # Новая картинка заменяет старую файл.
+    await alice.post(f"{PROFILE}/avatar", files={"file": ("b.png", PNG + b"1", "image/png")})
+    assert len(list(tmp_path.iterdir())) == 1
+
+    assert (await alice.delete(f"{PROFILE}/avatar")).status_code == 204
+    assert list(tmp_path.iterdir()) == []
+    assert (await bob.get(f"{PROFILE}/{alice.id}/avatar")).status_code == 404
+
+
+async def test_avatar_rejects_non_images_and_big_files(world, tmp_path, monkeypatch):
+    from api_v1.profile import avatar
+
+    monkeypatch.setattr(avatar, "UPLOAD_DIR", tmp_path)
+    alice = world["alice"]
+    fake = await alice.post(f"{PROFILE}/avatar", files={"file": ("a.png", b"<html>", "image/png")})
+    assert fake.status_code == 400
+    big = await alice.post(
+        f"{PROFILE}/avatar", files={"file": ("a.png", PNG + b"0" * avatar.MAX_SIZE, "image/png")}
+    )
+    assert big.status_code == 413
+    assert list(tmp_path.iterdir()) == []

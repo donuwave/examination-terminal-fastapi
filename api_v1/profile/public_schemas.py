@@ -17,6 +17,12 @@ class PublicProfile(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     role: str
+    has_avatar: bool = False
+    # Unix-секунды регистрации.
+    created_at: int
+    # Возраст и пол: видны владельцу, преподавателю студента и тем, кому владелец их открыл.
+    age: Optional[int] = None
+    gender: Optional[int] = None
 
 
 class PrivateProfile(PublicProfile):

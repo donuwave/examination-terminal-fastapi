@@ -80,6 +80,8 @@ async def test_attempts_out_and_extra_attempt(world):
     out = (await notes(teacher))[0]
     assert out["kind"] == "attempts_out" and "Сортировки" in out["text"]
     assert out["link"].endswith(f"/tests/{world['test_id']}/results")
+    # Имя студента в тексте можно сделать ссылкой на профиль.
+    assert out["actor_id"] == alice.id and out["actor_name"] in out["text"]
 
     grant = {"course_id": world["course_id"], "test_id": world["test_id"], "student_id": alice.id}
     await teacher.post(f"{PROGRESS}/grant", json=grant)

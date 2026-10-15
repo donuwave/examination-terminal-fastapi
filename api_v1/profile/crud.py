@@ -6,6 +6,7 @@ from sqlalchemy import Result, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from api_v1.profile import avatar as avatar_storage
 from api_v1.profile.schemas import ProfileGet, ProfileUpdate
 from core.models import (
     Course,
@@ -59,10 +60,29 @@ async def update_profile(
     update_data = profile_update.model_dump(exclude_unset=True).items()
 
     for name, value in update_data:
+        if name == "show_details" and value is None:
+            continue
         setattr(current_profile, name, value)
 
     await session.commit()
     return current_profile
+
+
+async def set_avatar(session: AsyncSession, user_id: int, upload) -> ProfileGet:
+    profile = await get_profile(user_id=user_id, session=session)
+    old = profile.avatar
+    profile.avatar = await avatar_storage.save_avatar(upload)
+    await session.commit()
+    avatar_storage.delete_file(old)
+    return profile
+
+
+async def remove_avatar(session: AsyncSession, user_id: int) -> None:
+    profile = await get_profile(user_id=user_id, session=session)
+    old = profile.avatar
+    profile.avatar = None
+    await session.commit()
+    avatar_storage.delete_file(old)
 
 
 async def delete_account(session: AsyncSession, user_id: int) -> None:
@@ -71,7 +91,8 @@ async def delete_account(session: AsyncSession, user_id: int) -> None:
     Преподавателя с курсами или тестами не удаляем: они остались бы без автора,
     а студенты потеряли бы курс. Сначала курсы нужно удалить.
     """
-    await get_profile(user_id=user_id, session=session)
+    profile = await get_profile(user_id=user_id, session=session)
+    avatar = profile.avatar
 
     owns_course = await session.scalar(select(Course.id).where(Course.teacher_id == user_id).limit(1))
     owns_test = await session.scalar(select(Test.id).where(Test.creator_id == user_id).limit(1))
@@ -94,3 +115,4 @@ async def delete_account(session: AsyncSession, user_id: int) -> None:
     await session.execute(delete(User).where(User.profile_id == user_id))
     await session.execute(delete(Profile).where(Profile.id == user_id))
     await session.commit()
+    avatar_storage.delete_file(avatar)

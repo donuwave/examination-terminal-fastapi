@@ -46,7 +46,10 @@ async def notify(
     title: str,
     text: str,
     link: str | None = None,
+    actor_id: int | None = None,
 ) -> None:
     if not await is_enabled(session, user_id, kind):
         return
-    session.add(Notification(user_id=user_id, kind=kind, title=title, text=text, link=link))
+    session.add(Notification(
+            user_id=user_id, kind=kind, title=title, text=text, link=link, actor_id=actor_id
+        ))

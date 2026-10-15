@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
@@ -19,9 +20,11 @@ class Profile(ProfileBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    has_avatar: bool = False
 
 
 class ProfileUpdate(BaseModel):
+    show_details: Optional[bool] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     age: Optional[int] = None
@@ -33,3 +36,5 @@ class ProfileUpdate(BaseModel):
 class ProfileGet(Profile):
     role: Role
     role_id: int
+    created_at: datetime
+    show_details: bool = False

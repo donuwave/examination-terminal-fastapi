@@ -88,6 +88,7 @@ async def apply(session: AsyncSession, course: Course, student_id: int) -> Cours
         "Новая заявка на курс",
         f"{notifications.person_name(student)} хочет записаться на курс «{course.name}»",
         f"/courses/{course.id}",
+        actor_id=student.id,
     )
     await session.commit()
     return await _reload(session, request)
@@ -132,6 +133,7 @@ async def invite(session: AsyncSession, course: Course, email: str) -> CourseReq
         "Приглашение на курс",
         f"{notifications.person_name(teacher)} приглашает вас на курс «{course.name}»",
         "/",
+        actor_id=teacher.id,
     )
     await session.commit()
     return await _reload(session, request)
@@ -220,6 +222,7 @@ async def answer_invitation(
         f"{notifications.person_name(request.student)} "
         f"{'принял приглашение на курс' if accept else 'отклонил приглашение на курс'} «{request.course.name}»",
         f"/courses/{request.course_id}",
+        actor_id=request.student_id,
     )
     await session.commit()
     return request

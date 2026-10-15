@@ -82,6 +82,7 @@ async def _tell_teacher_if_out(session: AsyncSession, progress: TestProgress) ->
         f"У студента {notifications.person_name(student)} закончились попытки теста "
         f"«{progress.test.name}» в курсе «{course.name}»",
         f"/courses/{course.id}/tests/{progress.test_id}/results",
+        actor_id=student.id,
     )
 
 
@@ -106,6 +107,7 @@ async def _tell_teacher_if_finished(session: AsyncSession, progress: TestProgres
         "Студент прошёл курс",
         f"{notifications.person_name(student)} прошёл все разделы курса «{course.name}»",
         f"/courses/{course.id}/analytics",
+        actor_id=student.id,
     )
 
 

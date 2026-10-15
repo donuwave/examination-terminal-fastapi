@@ -12,6 +12,8 @@ class NotificationGet(BaseModel):
     title: str
     text: str
     link: Optional[str] = None
+    actor_id: Optional[int] = None
+    actor_name: Optional[str] = None
     created_at: datetime
     read_at: Optional[datetime] = None
 

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from api_v1.course_section.state import course_progress
+from api_v1.profile.avatar import file_path
 from api_v1.profile.public_schemas import (
     ProfileCourse,
     ProfileCourses,
@@ -37,6 +38,17 @@ TEACHER, STUDENT = "Преподаватель", "Студент"
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль не найден")
+
+
+async def avatar_path(session: AsyncSession, viewer_id: int, target_id: int):
+    """Файл аватара, если смотрящий вправе видеть профиль."""
+    viewer = await _load(session, viewer_id)
+    target = await _load(session, target_id)
+    if viewer is None or target is None or await _access(session, viewer, target) == "none":
+        raise _not_found()
+    if not target.has_avatar:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Аватара нет")
+    return file_path(target.avatar)
 
 
 async def _load(session: AsyncSession, profile_id: int) -> Profile | None:
@@ -91,8 +103,15 @@ async def get_profile_card(
         raise _not_found()
 
     base = dict(
-        id=target.id, first_name=target.first_name, last_name=target.last_name, role=target.role.name
+        id=target.id,
+        first_name=target.first_name,
+        last_name=target.last_name,
+        role=target.role.name,
+        has_avatar=target.has_avatar,
+        created_at=int(target.created_at.timestamp()),
     )
+    if level in ("self", "owner") or target.show_details:
+        base.update(age=target.age, gender=target.gender)
     if level in ("self", "owner"):
         return PrivateProfile(**base, email=target.email)
     return PublicProfile(**base)
