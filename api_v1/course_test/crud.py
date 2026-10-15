@@ -7,8 +7,6 @@ from api_v1.course_test.schemas import TestGet, TestUpdate
 
 from api_v1.questions import crud as crud_question
 from core.models import (
-    Course,
-    CourseSection,
     CourseTestAssociation,
     Question,
     Test,
@@ -29,34 +27,6 @@ async def get_list_test(session: AsyncSession, user_id: int):
     result: Result = await session.execute(state)
     tests = result.scalars().all()
     return list(tests)
-
-
-async def get_placements(session: AsyncSession, user_id: int):
-    """Где лежит каждый тест автора: курс и раздел."""
-    rows = await session.execute(
-        select(
-            CourseTestAssociation.test_id,
-            Course.id,
-            Course.name,
-            CourseSection.id,
-            CourseSection.title,
-        )
-        .join(Test, Test.id == CourseTestAssociation.test_id)
-        .join(Course, Course.id == CourseTestAssociation.course_id)
-        .outerjoin(CourseSection, CourseSection.id == CourseTestAssociation.section_id)
-        .where(Test.creator_id == user_id)
-        .order_by(Course.name, CourseSection.position)
-    )
-    return [
-        {
-            "test_id": test_id,
-            "course_id": course_id,
-            "course_name": course_name,
-            "section_id": section_id,
-            "section_title": section_title,
-        }
-        for test_id, course_id, course_name, section_id, section_title in rows.all()
-    ]
 
 
 async def create_test(

@@ -52,11 +52,3 @@ class TestUpdate(BaseModel):
     pass_percent: Optional[int] = Field(None, ge=1, le=100)
     max_attempts: Optional[int] = Field(None, ge=1, le=10)
     retry_delay_minutes: Optional[int] = Field(None, ge=0, le=10080)
-
-
-class TestPlacement(BaseModel):
-    test_id: int
-    course_id: int
-    course_name: str
-    section_id: Optional[int] = None
-    section_title: Optional[str] = None

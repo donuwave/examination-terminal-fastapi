@@ -10,7 +10,7 @@ from api_v1.course.dependencies import get_course_by_id
 from api_v1.course.schemas import CourseGet
 from api_v1.course_test import crud as test_crud
 from api_v1.course_test.dependencies import get_own_test
-from api_v1.course_test.schemas import TestGet, TestPlacement, TestUpdate
+from api_v1.course_test.schemas import TestGet, TestUpdate
 from api_v1.questions import crud as question_crud
 from api_v1.questions.schemas import QuestionBase, QuestionGet, QuestionUpdatePartial
 from core.models import db_helper
@@ -25,15 +25,6 @@ async def get_tests(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await test_crud.get_list_test(session=session, user_id=user_id)
-
-
-@router.get("/placements", response_model=List[TestPlacement])
-async def get_placements(
-    user_id: int = Depends(get_user_id_in_access_token),
-    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
-):
-    """Курсы и разделы, в которых лежат тесты автора."""
-    return await test_crud.get_placements(session=session, user_id=user_id)
 
 
 @router.get("/{test_id}", response_model=TestGet)

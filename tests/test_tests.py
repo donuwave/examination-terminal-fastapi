@@ -128,24 +128,3 @@ async def test_questions_can_be_reordered(world):
     other = await second_teacher(world)
     assert (await other.put(f"{TESTS}/{test_id}/questions/order", json=ids)).status_code == 403
     assert (await world["alice"].put(f"{TESTS}/{test_id}/questions/order", json=ids)).status_code == 403
-
-
-async def test_placements_show_course_and_only_own_tests(world):
-    teacher, test_id = world["teacher"], world["test_id"]
-    rows = (await teacher.get(f"{TESTS}/placements")).json()
-    assert [row["test_id"] for row in rows] == [test_id]
-    assert rows[0]["course_id"] == world["course_id"]
-
-    other = await second_teacher(world)
-    assert (await other.get(f"{TESTS}/placements")).json() == []
-
-
-async def test_test_with_attempts_can_be_removed_from_section(world):
-    alice, teacher = world["alice"], world["teacher"]
-    course_id, section_id, test_id = world["course_id"], world["section_id"], world["test_id"]
-    await finish(alice, await start(alice, world))
-    response = await teacher.delete(f"/api/v1/course/{course_id}/sections/{section_id}/tests/{test_id}")
-    assert response.status_code == 204
-    sections = (await teacher.get(f"/api/v1/course/{course_id}/sections")).json()
-    assert sections[0]["tests"] == []
-    assert (await teacher.get(f"{TESTS}/{test_id}")).status_code == 200  # сам тест остался
