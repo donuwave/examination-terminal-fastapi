@@ -94,4 +94,4 @@ async def get_avatar(
 ):
     """Картинка профиля. Видна тем, кто вправе видеть сам профиль."""
     path = await public_crud.avatar_path(session, user_id, profile_id)
-    return FileResponse(path, headers={"Cache-Control": "private, max-age=300"})
+    return FileResponse(path, headers={"Cache-Control": "private, no-cache"})
