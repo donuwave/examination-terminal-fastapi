@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from api_v1.course_test.schemas import TestGet, TestUpdate
 
 from api_v1.questions import crud as crud_question
+from api_v1.test_progress.cleanup import delete_attempts
 from core.models import (
     CourseTestAssociation,
     Question,
@@ -79,19 +80,10 @@ async def update_test(session: AsyncSession, test: Test, data: TestUpdate) -> Te
 
 
 async def delete_test(session: AsyncSession, test: Test) -> None:
-    """Удаляет тест вместе с вопросами. Тест с попытками студентов не трогаем, чтобы не потерять их результаты."""
-    attempts = await session.scalar(
-        select(func.count(TestProgress.id)).where(TestProgress.test_id == test.id)
-    )
-    if attempts:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="У теста есть попытки студентов. Уберите его из разделов, а не удаляйте",
-        )
-
+    """Удаляет тест вместе с вопросами и попытками студентов."""
+    await delete_attempts(session, test.id)
     question_ids = [assoc.question_id for assoc in test.questions]
     await session.execute(delete(CourseTestAssociation).where(CourseTestAssociation.test_id == test.id))
-    await session.execute(delete(TestExtraAttempt).where(TestExtraAttempt.test_id == test.id))
     await session.execute(delete(TestQuestionAssociation).where(TestQuestionAssociation.test_id == test.id))
     if question_ids:
         await session.execute(delete(Question).where(Question.id.in_(question_ids)))

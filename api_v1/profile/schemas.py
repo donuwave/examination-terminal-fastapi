@@ -24,7 +24,6 @@ class Profile(ProfileBase):
 
 
 class ProfileUpdate(BaseModel):
-    show_details: Optional[bool] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     age: Optional[int] = None
@@ -37,4 +36,3 @@ class ProfileGet(Profile):
     role: Role
     role_id: int
     created_at: datetime
-    show_details: bool = False

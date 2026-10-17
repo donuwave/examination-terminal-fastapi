@@ -131,20 +131,16 @@ async def test_registration_date_is_shown(world):
     assert isinstance(card["created_at"], int) and card["created_at"] > 0
 
 
-async def test_age_and_gender_hidden_until_owner_allows(world, monkeypatch):
+async def test_age_and_gender_are_seen_only_by_owner_and_teacher(world):
     alice, bob, teacher = world["alice"], world["bob"], world["teacher"]
     await alice.patch(f"{PROFILE}/", json={"age": 21, "gender": 1})
 
-    # Однокурсник по умолчанию ничего не видит, преподаватель студента видит всегда.
-    assert (await bob.get(f"{PROFILE}/{alice.id}")).json()["age"] is None
+    own = (await alice.get(f"{PROFILE}/{alice.id}")).json()
+    assert (own["age"], own["gender"]) == (21, 1)
     assert (await teacher.get(f"{PROFILE}/{alice.id}")).json()["age"] == 21
-
-    await alice.patch(f"{PROFILE}/", json={"show_details": True})
-    opened = (await bob.get(f"{PROFILE}/{alice.id}")).json()
-    assert (opened["age"], opened["gender"]) == (21, 1)
-
-    await alice.patch(f"{PROFILE}/", json={"show_details": False})
-    assert (await bob.get(f"{PROFILE}/{alice.id}")).json()["age"] is None
+    # Однокурсник возраст и пол не видит.
+    seen = (await bob.get(f"{PROFILE}/{alice.id}")).json()
+    assert seen["age"] is None and seen["gender"] is None
 
 
 async def test_avatar_upload_visibility_and_removal(world, tmp_path, monkeypatch):

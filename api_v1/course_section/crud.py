@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from api_v1.course_material.storage import delete_files
 from api_v1.course_section.schemas import SectionGet, SectionTest
 from api_v1.course_section.state import course_progress
+from api_v1.test_progress.cleanup import delete_attempts
 from api_v1.test_progress.schemas import TestState
 from core.models import (
     CourseMaterial,
@@ -126,16 +127,7 @@ async def delete_section(session: AsyncSession, section: CourseSection) -> None:
         )
     ).all()
     for assoc in associations:
-        started = await session.scalar(
-            select(TestProgress.id)
-            .where(TestProgress.test_id == assoc.test_id, TestProgress.course_id == section.course_id)
-            .limit(1)
-        )
-        if started is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="В разделе есть тест, который студенты уже проходили. Раздел удалить нельзя",
-            )
+        await delete_attempts(session, assoc.test_id, section.course_id)
         await session.delete(assoc)
 
     await session.delete(section)

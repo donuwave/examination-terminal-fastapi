@@ -79,11 +79,24 @@ async def test_student_cannot_touch_questions_endpoints(world):
     assert (await world["alice"].get("/api/v1/questions/1")).status_code == 404
 
 
-async def test_test_with_attempts_cannot_be_deleted(world):
-    alice = world["alice"]
+async def test_test_with_attempts_is_deleted_with_them(world):
+    alice, teacher = world["alice"], world["teacher"]
     await finish(alice, await start(alice, world))
-    response = await world["teacher"].delete(f"{TESTS}/{world['test_id']}")
-    assert response.status_code == 409
+    assert (await teacher.delete(f"{TESTS}/{world['test_id']}")).status_code == 204
+    assert (await teacher.get(f"{TESTS}/")).json() == []
+    # Попыток студента по удалённому тесту больше нет.
+    assert (await alice.get("/api/v1/test-progress/")).json() == []
+
+
+async def test_section_with_attempts_is_deleted_with_them(world):
+    alice, teacher = world["alice"], world["teacher"]
+    course_id, section_id = world["course_id"], world["section_id"]
+    await finish(alice, await start(alice, world))
+    response = await teacher.delete(f"/api/v1/course/{course_id}/sections/{section_id}")
+    assert response.status_code == 204
+    assert (await alice.get("/api/v1/test-progress/")).json() == []
+    # Сам тест остался у автора, просто больше не лежит в курсе.
+    assert (await teacher.get(f"{TESTS}/{world['test_id']}")).status_code == 200
 
 
 async def test_unused_test_is_deleted_everywhere(world):

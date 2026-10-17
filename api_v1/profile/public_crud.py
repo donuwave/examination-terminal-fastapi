@@ -110,7 +110,7 @@ async def get_profile_card(
         has_avatar=target.has_avatar,
         created_at=int(target.created_at.timestamp()),
     )
-    if level in ("self", "owner") or target.show_details:
+    if level in ("self", "owner"):
         base.update(age=target.age, gender=target.gender)
     if level in ("self", "owner"):
         return PrivateProfile(**base, email=target.email)

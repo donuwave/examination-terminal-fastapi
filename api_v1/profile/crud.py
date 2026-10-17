@@ -60,8 +60,6 @@ async def update_profile(
     update_data = profile_update.model_dump(exclude_unset=True).items()
 
     for name, value in update_data:
-        if name == "show_details" and value is None:
-            continue
         setattr(current_profile, name, value)
 
     await session.commit()

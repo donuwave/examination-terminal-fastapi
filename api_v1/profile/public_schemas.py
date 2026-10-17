@@ -20,7 +20,7 @@ class PublicProfile(BaseModel):
     has_avatar: bool = False
     # Unix-секунды регистрации.
     created_at: int
-    # Возраст и пол: видны владельцу, преподавателю студента и тем, кому владелец их открыл.
+    # Возраст и пол: видны владельцу и преподавателю студента.
     age: Optional[int] = None
     gender: Optional[int] = None
 
