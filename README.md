@@ -12,7 +12,7 @@
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0_async-D71F00)
 ![Tests](https://img.shields.io/badge/tests-97_passed-2EA44F)
 
-[Фронтенд](https://github.com/donuwave/examination-terminal-vue) · [Документация API](http://localhost:8000/docs) · [Планы](TODO.md)
+[Фронтенд](https://github.com/donuwave/examination-terminal-vue) · [Документация API](http://localhost:8000/docs)
 
 </div>
 
@@ -142,7 +142,3 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 Поднимутся PostgreSQL и API, миграции применяются при старте. Ключи JWT и загруженные файлы подключаются томами и в образ не попадают. Приложение запускается с `--proxy-headers`: за прокси лимиты входа считаются по настоящему адресу клиента.
 
 > Лимиты запросов хранятся в памяти процесса. Для нескольких экземпляров приложения их нужно вынести в общее хранилище, например в Redis.
-
-## Что дальше
-
-Платные курсы, письма, уведомления в реальном времени и прочее: [TODO.md](TODO.md).
