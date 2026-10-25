@@ -19,7 +19,6 @@ __all__ = (
     "MaterialView",
     "Notification",
     "NotificationPref",
-    "PasswordReset",
     "DatabaseHelper",
     "db_helper",
 )
@@ -43,4 +42,3 @@ from .test_extra_attempt import TestExtraAttempt
 from .course_request import CourseRequest
 from .notification import Notification, NotificationPref
 from .material_view import MaterialView
-from .password_reset import PasswordReset
