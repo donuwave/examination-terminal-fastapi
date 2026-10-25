@@ -12,7 +12,15 @@ import httpx  # noqa: E402
 import pytest_asyncio  # noqa: E402
 
 from core.models import Role, db_helper  # noqa: E402
-from core.rate_limit import login_limiter, password_limiter, registration_limiter  # noqa: E402
+from core import mail  # noqa: E402
+from core.rate_limit import (  # noqa: E402
+    login_limiter,
+    password_limiter,
+    registration_limiter,
+    reset_check_limiter,
+    reset_email_limiter,
+    reset_ip_limiter,
+)
 from main import app  # noqa: E402
 from tests.test_db import TestSessionLocal, get_test_db, recreate_schema, test_engine  # noqa: E402
 
@@ -61,6 +69,9 @@ async def database():
     login_limiter.reset()
     password_limiter.reset()
     registration_limiter.reset()
+    reset_email_limiter.reset()
+    reset_ip_limiter.reset()
+    reset_check_limiter.reset()
     yield
     await test_engine.dispose()
 
@@ -123,3 +134,15 @@ async def world():
         "transport": transport,
     }
     await anon.aclose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def outbox(monkeypatch):
+    """Письма не уходят в сеть, а складываются в список."""
+    sent: list[mail.Mail] = []
+
+    async def collect(letter: mail.Mail) -> None:
+        sent.append(letter)
+
+    monkeypatch.setattr(mail, "sender", collect)
+    return sent
