@@ -12,7 +12,7 @@
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0_async-D71F00)
 ![Tests](https://img.shields.io/badge/tests-97_passed-2EA44F)
 
-[Фронтенд](https://github.com/donuwave/examination-terminal-vue) · [Документация API](http://localhost:8000/docs)
+[Фронтенд](https://github.com/donuwave/examination-terminal-vue)
 
 </div>
 
